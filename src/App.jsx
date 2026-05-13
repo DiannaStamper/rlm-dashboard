@@ -862,7 +862,7 @@ export default function App() {
       {/* Header */}
       <div style={{ background: C.green, padding: '12px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-<img src="/src/assets/RLM_icon_192x192.png" alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%', marginRight: 10 }} />
+<img src="./RLM_icon192x192.png" alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%', marginRight: 10 }} />
           <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Dashboard</div>
           <div style={{ color: C.sageLight, fontSize: 11 }}>Real Life Money · myRealLifeMoney.com</div>
         </div>
