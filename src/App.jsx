@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import rlmLogo from './assets/RLM_icon_192x192.png';
 
 // =====================================================================
 // BRAND COLORS
