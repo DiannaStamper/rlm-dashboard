@@ -334,7 +334,7 @@ function EverythingPage({ bills, setBills }) {
       {subs.length > 0 && (
         <Card style={{ background: C.creamDark }}>
           <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.espresso, marginBottom: 10, fontSize: 14 }}>🔍 Subscription Watch</div>
-          <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr' : 'repeat(3,1fr)'', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
             {[['Monthly Total', fmt(subTotal), C.green], ['Count', subs.length, C.green], ['Annual Cost', fmt(subTotal * 12), C.espresso]].map(([l, v, col]) => (
               <div key={l}><div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase' }}>{l}</div><div style={{ fontSize: 20, fontWeight: 700, color: col }}>{v}</div></div>
             ))}
