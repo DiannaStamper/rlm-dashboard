@@ -1,11 +1,24 @@
 import crypto from 'crypto';
+function parseCookies(req) {
+  const cookieHeader = req.headers.cookie || '';
+  const cookies = {};
+  cookieHeader.split(';').forEach(function(cookie) {
+    const parts = cookie.trim().split('=');
+    if (parts.length >= 2) {
+      cookies[parts[0].trim()] = parts.slice(1).join('=');
+    }
+  });
+  return cookies;
+}
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   const sessionSecret = process.env.SESSION_SECRET;
   const apiKey = process.env.MEMBERFUL_API_KEY;
-  const pendingCookie = req.cookies && req.cookies.rlm_pending;
+  const cookies = parseCookies(req);
+  const pendingCookie = cookies.rlm_pending;
+  console.log('Pending cookie present:', !!pendingCookie);
   if (!pendingCookie) {
     return res.status(401).json({ error: 'No pending session' });
   }
@@ -26,7 +39,7 @@ export default async function handler(req, res) {
   if (!email) {
     return res.status(400).json({ error: 'Email required' });
   }
-  const query = `{ memberByEmail(email: "${email.toLowerCase().trim()}") { email subscriptions { active plan { id } } } }`;
+  const query = '{ memberByEmail(email: "' + email.toLowerCase().trim() + '") { email subscriptions { active plan { id } } } }';
   const gqlRes = await fetch('https://myreallifemoney.memberful.com/api/graphql', {
     method: 'POST',
     headers: {
