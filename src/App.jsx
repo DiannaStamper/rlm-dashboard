@@ -244,7 +244,7 @@ function BillForm({ bill, onSave, onCancel }) {
   const isCD = ['Credit', 'Debt/Loan'].includes(form.category);
   return (
     <div style={{ background: C.cream, borderRadius: 10, padding: 14, border: `1.5px solid ${C.creamDark}`, marginBottom: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr 1fr' : '2fr 1fr 1fr 1fr 1fr', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr 1fr' : '2fr 1fr 1fr 1fr 1fr', gap:8 }}>
         <FI label="Company / Bill Name" value={form.company} onChange={e => set('company', e.target.value)} placeholder="e.g. Electric Co." />
         <FI label="Category" value={form.category} onChange={e => set('category', e.target.value)} options={CATS} />
         <FI label="Status" value={form.status} onChange={e => set('status', e.target.value)} options={STATS} />
