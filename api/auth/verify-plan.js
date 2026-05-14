@@ -23,7 +23,9 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'No pending session' });
   }
   try {
-    const [b64, sig] = pendingCookie.split('.');
+    const lastDot = pendingCookie.lastIndexOf('.');
+    const b64 = pendingCookie.substring(0, lastDot);
+    const sig = pendingCookie.substring(lastDot + 1);
     const expectedSig = crypto.createHmac('sha256', sessionSecret).update(b64).digest('hex');
     if (sig !== expectedSig) {
       return res.status(401).json({ error: 'Invalid session' });
