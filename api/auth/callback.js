@@ -26,6 +26,7 @@ export default async function handler(req, res) {
     const tokenData = await tokenRes.json();
     console.log('Callback params:', JSON.stringify(req.query));
 console.log('Token preview:', tokenData.access_token ? tokenData.access_token.substring(0, 15) : 'none');
+    console.log('Full token data:', JSON.stringify(tokenData));
     if (!tokenData.access_token) {
       console.error('Token failed:', JSON.stringify(tokenData));
       return res.redirect('/?error=token_failed');
