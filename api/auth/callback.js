@@ -8,10 +8,11 @@ export default async function handler(req, res) {
   const clientId = process.env.MEMBERFUL_CLIENT_ID;
   const clientSecret = process.env.MEMBERFUL_CLIENT_SECRET;
   const sessionSecret = process.env.SESSION_SECRET;
+  const apiKey = process.env.MEMBERFUL_API_KEY;
   const redirectUri = 'https://dashboard.myRealLifeMoney.com/api/auth/callback';
 
   try {
-    // Exchange code for access token
+    // Step 1: Exchange code for access token
     const tokenRes = await fetch('https://myreallifemoney.memberful.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -25,33 +26,45 @@ export default async function handler(req, res) {
     });
 
     const tokenData = await tokenRes.json();
-
     if (!tokenData.access_token) {
       console.error('Token exchange failed:', tokenData);
       return res.redirect('/?error=token_failed');
     }
 
-    // Check subscription via Memberful GraphQL
+    // Step 2: Get member identity via OAuth userinfo
+    const userInfoRes = await fetch('https://myreallifemoney.memberful.com/oauth/userinfo', {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+    });
+    const userInfo = await userInfoRes.json();
+    console.log('UserInfo:', JSON.stringify(userInfo));
+
+    const memberId = userInfo?.id || userInfo?.sub;
+    if (!memberId) {
+      console.error('No member ID in userinfo:', userInfo);
+      return res.redirect('https://myreallifemoney.memberful.com/checkout?plan=147763');
+    }
+
+    // Step 3: Check subscription via admin API key
     const gqlRes = await fetch('https://myreallifemoney.memberful.com/api/graphql', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenData.access_token}`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        query: `{ currentMember { email subscriptions { active plan { id } } } }`
+        query: `{ member(id: ${memberId}) { email subscriptions { active } } }`
       }),
     });
 
     const gqlData = await gqlRes.json();
-    const member = gqlData?.data?.currentMember;
-console.log('Memberful GQL response:', JSON.stringify(gqlData));
+    console.log('Subscription data:', JSON.stringify(gqlData));
+    const member = gqlData?.data?.member;
 
     if (!member || !member.subscriptions?.some(s => s.active)) {
       return res.redirect('https://myreallifemoney.memberful.com/checkout?plan=147763');
     }
 
-    // Build signed session cookie
+    // Step 4: Set signed session cookie
     const sessionData = JSON.stringify({
       email: member.email,
       expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
