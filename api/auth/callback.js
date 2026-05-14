@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         client_id: clientId,
         client_secret: clientSecret,
         redirect_uri: redirectUri,
-      }).toString(),
+      ).toString(),
     });
 
     const tokenData = await tokenRes.json();
@@ -53,8 +53,7 @@ console.log('Token preview:', tokenData.access_token ? tokenData.access_token.su
     if (!hasAccess) {
       return res.redirect('/?error=no_plan');
     }
-    }
-
+    
     // Step 3: Set signed session cookie
     const sessionData = JSON.stringify({
       email,
