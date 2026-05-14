@@ -32,19 +32,30 @@ console.log('Token preview:', tokenData.access_token ? tokenData.access_token.su
       return res.redirect('/?error=token_failed');
     }
 
-   // Step 2: Get member info via JSON REST API
+   // Step 2: Get member info via GraphQL
     let email = null;
     let hasAccess = false;
     try {
-      const memberRes = await fetch('https://myreallifemoney.memberful.com/api/json/v1/member?auth_token=' + tokenData.access_token);
-      const memberData = await memberRes.json();
-      console.log('Member API:', JSON.stringify(memberData).substring(0, 500));
-      if (memberData && memberData.member && memberData.member.email) {
-        email = memberData.member.email;
-        const subs = memberData.member.subscriptions || [];
+      const gqlRes = await fetch('https://myreallifemoney.memberful.com/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + tokenData.access_token
+        },
+        body: JSON.stringify({ query: '{ currentMember { id email subscriptions { active plan { id } } } }' }),
+      });
+      const gqlText = await gqlRes.text();
+      console.log('GQL Bearer:', gqlText.substring(0, 500));
+      let gqlData;
+      try { gqlData = JSON.parse(gqlText); } catch(e) { console.log('GQL not JSON'); }
+      if (gqlData && gqlData.data && gqlData.data.currentMember && gqlData.data.currentMember.email) {
+        email = gqlData.data.currentMember.email;
+        const subs = gqlData.data.currentMember.subscriptions || [];
         hasAccess = subs.some(function(sub) { return sub.active && sub.plan && sub.plan.id === 147763; });
-        console.log('Plan check:', JSON.stringify({ email: email, hasAccess: hasAccess, plans: subs.map(function(s) { return s.plan && s.plan.id; }) }));
+        console.log('Plan check:', JSON.stringify({ email: email, hasAccess: hasAccess }));
       }
+    } catch(e) {
+      console.log('GQL error:', e.message);
     } catch(e) {
       console.log('Member API error:', e.message);
     }
