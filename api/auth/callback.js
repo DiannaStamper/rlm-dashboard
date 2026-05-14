@@ -25,16 +25,19 @@ export default async function handler(req, res) {
     }
     let email = null;
     let hasAccess = false;
-    const gqlRes = await fetch('https://myreallifemoney.memberful.com/api/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + tokenData.access_token,
-      },
-      body: JSON.stringify({ query: '{ currentMember { id email subscriptions { active plan { id } } } }' }),
-    });
-    const gqlText = await gqlRes.text();
-    console.log('GQL Bearer:', gqlText.substring(0, 500));
+    const endpoints = [
+      'https://myreallifemoney.memberful.com/oauth/userinfo',
+      'https://myreallifemoney.memberful.com/api/v1/member',
+      'https://myreallifemoney.memberful.com/member/current.json',
+    ];
+    for (const url of endpoints) {
+      const testRes = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + tokenData.access_token },
+      });
+      const testText = await testRes.text();
+      console.log('Endpoint ' + url.split('/').pop() + ':', testRes.status, testText.substring(0, 200));
+    }
+    const gqlText = '{}';
     try {
       const gqlData = JSON.parse(gqlText);
       if (gqlData && gqlData.data && gqlData.data.currentMember) {
