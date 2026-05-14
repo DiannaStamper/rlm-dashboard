@@ -834,6 +834,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
 
 useEffect(() => {
+    if (window.location.pathname === '/verify') return;
     fetch('/api/auth/check')
       .then(r => { if (r.ok) setAuthReady(true); else window.location.href = '/api/auth/login'; })
       .catch(() => { window.location.href = '/api/auth/login'; });
@@ -856,6 +857,7 @@ useEffect(() => {
   useEffect(() => { sv('snow', snow); }, [snow]);
   useEffect(() => { sv('aval', aval); }, [aval]);
 
+  if (window.location.pathname === '/verify') return <VerifyPage />;
   if (!authReady) return (
     <div style={{ minHeight: '100vh', background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Segoe UI", system-ui, sans-serif' }}>
       <div style={{ textAlign: 'center' }}>
