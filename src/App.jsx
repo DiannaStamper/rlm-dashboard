@@ -821,7 +821,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
 // MAIN APP
 // =====================================================================
 export default function App() {
-  }
   const [bills, setBills] = useState([]);
   const [pay, setPay] = useState({ frequency: 'Biweekly', nextDate: '', amount: '' });
   const [grocery, setGrocery] = useState({});
