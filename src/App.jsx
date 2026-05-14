@@ -833,7 +833,7 @@ export default function App() {
   const [coach, setCoach] = useState(false);
   const [authReady, setAuthReady] = useState(false);
 
-  useEffect(() => {
+useEffect(() => {
     fetch('/api/auth/check')
       .then(r => { if (r.ok) setAuthReady(true); else window.location.href = '/api/auth/login'; })
       .catch(() => { window.location.href = '/api/auth/login'; });
