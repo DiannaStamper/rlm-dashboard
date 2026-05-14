@@ -830,6 +830,23 @@ export default function App() {
   const [aval, setAval] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/check')
+      .then(r => { if (r.ok) setAuthReady(true); else window.location.href = '/api/auth/login'; })
+      .catch(() => { window.location.href = '/api/auth/login'; });
+  }, []);
+
+  if (!authReady) return (
+    <div style={{ minHeight: '100vh', background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Segoe UI", system-ui, sans-serif' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
+        <div style={{ color: C.green, fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>Real Life Money</div>
+        <div style={{ color: C.charcoalLight, fontSize: 13, marginTop: 6 }}>Checking your membership…</div>
+      </div>
+    </div>
+  );
 
   // Persist to storage
   useEffect(() => {
