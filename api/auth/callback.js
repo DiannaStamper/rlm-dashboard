@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         client_id: clientId,
         client_secret: clientSecret,
         redirect_uri: redirectUri,
-      ).toString(),
+      }).toString(),
     });
 
     const tokenData = await tokenRes.json();
