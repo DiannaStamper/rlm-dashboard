@@ -45,6 +45,7 @@ export default async function handler(req, res) {
 
     const gqlData = await gqlRes.json();
     const member = gqlData?.data?.currentMember;
+console.log('Memberful GQL response:', JSON.stringify(gqlData));
 
     if (!member || !member.subscriptions?.some(s => s.active)) {
       return res.redirect('https://myreallifemoney.memberful.com/checkout?plan=147763');
