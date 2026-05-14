@@ -821,10 +821,10 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
 // MAIN APP
 // =====================================================================
 export default function App() {
-  const [memberChecked, setMemberChecked] = React.useState(false);
-  const [isMember, setIsMember] = React.useState(false);
+  const [memberChecked, setMemberChecked] = useState(false);
+  const [isMember, setIsMember] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const checkMember = () => {
       if (window.Memberful && window.Memberful.currentMember) {
         const member = window.Memberful.currentMember();
@@ -854,6 +854,7 @@ export default function App() {
 
   if (!isMember) {
     return null;
+  }
   }
   const [bills, setBills] = useState([]);
   const [pay, setPay] = useState({ frequency: 'Biweekly', nextDate: '', amount: '' });
