@@ -23,39 +23,33 @@ export default async function handler(req, res) {
     if (!tokenData.access_token) {
       return res.redirect('/?error=token_failed');
     }
+    const introspectRes = await fetch('https://myreallifemoney.memberful.com/oauth/introspect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(clientId + ':' + clientSecret).toString('base64'),
+      },
+      body: 'token=' + tokenData.access_token,
+    });
+    const introspectText = await introspectRes.text();
+    console.log('Introspect status:', introspectRes.status);
+    console.log('Introspect body:', introspectText.substring(0, 500));
     let email = null;
     let hasAccess = false;
-    const endpoints = [
-      'https://myreallifemoney.memberful.com/oauth/userinfo',
-      'https://myreallifemoney.memberful.com/api/v1/member',
-      'https://myreallifemoney.memberful.com/member/current.json',
-    ];
-    for (const url of endpoints) {
-      const testRes = await fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + tokenData.access_token },
-      });
-      const testText = await testRes.text();
-      console.log('Endpoint ' + url.split('/').pop() + ':', testRes.status, testText.substring(0, 200));
-    }
-    const gqlText = '{}';
     try {
-      const gqlData = JSON.parse(gqlText);
-      if (gqlData && gqlData.data && gqlData.data.currentMember) {
-        email = gqlData.data.currentMember.email;
-        const subs = gqlData.data.currentMember.subscriptions || [];
-        hasAccess = subs.some(function(sub) {
-          return sub.active && sub.plan && sub.plan.id === 147763;
-        });
-        console.log('Plan check:', JSON.stringify({ email: email, hasAccess: hasAccess }));
+      const introspectData = JSON.parse(introspectText);
+      if (introspectData && introspectData.email) {
+        email = introspectData.email;
+      }
+      if (introspectData && introspectData.sub) {
+        email = introspectData.sub;
       }
     } catch (parseErr) {
-      console.log('GQL parse error:', parseErr.message);
+      console.log('Introspect parse error:', parseErr.message);
     }
+    console.log('Email found:', email);
     if (!email) {
       return res.redirect('/?error=auth_failed');
-    }
-    if (!hasAccess) {
-      return res.redirect('/?error=no_plan');
     }
     const sessionData = JSON.stringify({
       email,
