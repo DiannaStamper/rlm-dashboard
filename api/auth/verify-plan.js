@@ -1,0 +1,62 @@
+import crypto from 'crypto';
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  const sessionSecret = process.env.SESSION_SECRET;
+  const apiKey = process.env.MEMBERFUL_API_KEY;
+  const pendingCookie = req.cookies && req.cookies.rlm_pending;
+  if (!pendingCookie) {
+    return res.status(401).json({ error: 'No pending session' });
+  }
+  try {
+    const [b64, sig] = pendingCookie.split('.');
+    const expectedSig = crypto.createHmac('sha256', sessionSecret).update(b64).digest('hex');
+    if (sig !== expectedSig) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+    const pendingData = JSON.parse(Buffer.from(b64, 'base64').toString());
+    if (!pendingData.pending || Date.now() > pendingData.expires) {
+      return res.status(401).json({ error: 'Session expired' });
+    }
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid session' });
+  }
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email required' });
+  }
+  const query = `{ memberByEmail(email: "${email.toLowerCase().trim()}") { email subscriptions { active plan { id } } } }`;
+  const gqlRes = await fetch('https://myreallifemoney.memberful.com/api/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey,
+    },
+    body: JSON.stringify({ query }),
+  });
+  const gqlData = await gqlRes.json();
+  console.log('Plan lookup:', JSON.stringify(gqlData).substring(0, 500));
+  const member = gqlData && gqlData.data && gqlData.data.memberByEmail;
+  if (!member) {
+    return res.status(403).json({ error: 'no_member' });
+  }
+  const subs = member.subscriptions || [];
+  const hasAccess = subs.some(function(sub) {
+    return sub.active && sub.plan && Number(sub.plan.id) === 147763;
+  });
+  if (!hasAccess) {
+    return res.status(403).json({ error: 'no_plan' });
+  }
+  const sessionData = JSON.stringify({
+    email: member.email,
+    expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+  });
+  const sig = crypto.createHmac('sha256', sessionSecret).update(sessionData).digest('hex');
+  const token = Buffer.from(sessionData).toString('base64') + '.' + sig;
+  res.setHeader('Set-Cookie', [
+    'rlm_session=' + token + '; HttpOnly; Secure; SameSite=Lax; Max-Age=604800; Path=/',
+    'rlm_pending=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/',
+  ]);
+  return res.status(200).json({ ok: true });
+}
