@@ -838,16 +838,6 @@ export default function App() {
       .catch(() => { window.location.href = '/api/auth/login'; });
   }, []);
 
-  if (!authReady) return (
-    <div style={{ minHeight: '100vh', background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Segoe UI", system-ui, sans-serif' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
-        <div style={{ color: C.green, fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>Real Life Money</div>
-        <div style={{ color: C.charcoalLight, fontSize: 13, marginTop: 6 }}>Checking your membership…</div>
-      </div>
-    </div>
-  );
-
   // Persist to storage
   useEffect(() => {
     const load = async () => {
@@ -865,6 +855,16 @@ export default function App() {
   useEffect(() => { sv('snow', snow); }, [snow]);
   useEffect(() => { sv('aval', aval); }, [aval]);
 
+  if (!authReady) return (
+    <div style={{ minHeight: '100vh', background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Segoe UI", system-ui, sans-serif' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
+        <div style={{ color: C.green, fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>Real Life Money</div>
+        <div style={{ color: C.charcoalLight, fontSize: 13, marginTop: 6 }}>Checking your membership…</div>
+      </div>
+    </div>
+  );
+  
   const TABS = [
     { id: 'everything', label: 'Everything Page' },
     { id: 'payday', label: 'Payday' },
