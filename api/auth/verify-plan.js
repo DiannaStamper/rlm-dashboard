@@ -26,7 +26,8 @@ export default async function handler(req, res) {
     const lastDot = pendingCookie.lastIndexOf('.');
     const b64 = pendingCookie.substring(0, lastDot);
     const sig = pendingCookie.substring(lastDot + 1);
-    const expectedSig = crypto.createHmac('sha256', sessionSecret).update(b64).digest('hex');
+    const rawData = Buffer.from(b64, 'base64').toString();
+    const expectedSig = crypto.createHmac('sha256', sessionSecret).update(rawData).digest('hex');
     if (sig !== expectedSig) {
       return res.status(401).json({ error: 'Invalid session' });
     }
