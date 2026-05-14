@@ -244,7 +244,7 @@ function BillForm({ bill, onSave, onCancel }) {
   const isCD = ['Credit', 'Debt/Loan'].includes(form.category);
   return (
     <div style={{ background: C.cream, borderRadius: 10, padding: 14, border: `1.5px solid ${C.creamDark}`, marginBottom: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr 1fr' : '2fr 1fr 1fr 1fr 1fr'', gap: 8 }}>
         <FI label="Company / Bill Name" value={form.company} onChange={e => set('company', e.target.value)} placeholder="e.g. Electric Co." />
         <FI label="Category" value={form.category} onChange={e => set('category', e.target.value)} options={CATS} />
         <FI label="Status" value={form.status} onChange={e => set('status', e.target.value)} options={STATS} />
@@ -334,7 +334,7 @@ function EverythingPage({ bills, setBills }) {
       {subs.length > 0 && (
         <Card style={{ background: C.creamDark }}>
           <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.espresso, marginBottom: 10, fontSize: 14 }}>🔍 Subscription Watch</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr' : 'repeat(3,1fr)'', gap: 12 }}>
             {[['Monthly Total', fmt(subTotal), C.green], ['Count', subs.length, C.green], ['Annual Cost', fmt(subTotal * 12), C.espresso]].map(([l, v, col]) => (
               <div key={l}><div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase' }}>{l}</div><div style={{ fontSize: 20, fontWeight: 700, color: col }}>{v}</div></div>
             ))}
@@ -882,7 +882,7 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
 <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%', marginRight: 10 }} />
           <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Dashboard</div>
-          <div style={{ color: C.sageLight, fontSize: 11 }}>Real Life Money · myRealLifeMoney.com</div>
+          {window.innerWidth >= 640 && <div style={{ color: C.sageLight, fontSize: 11, fontStyle: 'italic' }}>Living life. With money. For real.</div>}
         </div>
         <div style={{ color: C.sageLight, fontSize: 11, fontStyle: 'italic' }}>Living life. With money. For real.</div>
       </div>
