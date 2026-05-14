@@ -31,40 +31,28 @@ console.log('Token preview:', tokenData.access_token ? tokenData.access_token.su
       return res.redirect('/?error=token_failed');
     }
 
-    // Step 2: Try to get member email via GraphQL (multiple methods)
+   // Step 2: Get member info via JSON REST API
     let email = null;
-
-    // Try with no Bearer prefix
+    let hasAccess = false;
     try {
-      const r = await fetch('https://myreallifemoney.memberful.com/api/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': tokenData.access_token },
-        body: JSON.stringify({ query: '{ currentMember { id email } }' }),
-      });
-      const d = await r.json();
-      console.log('GQL no-bearer:', JSON.stringify(d).substring(0, 200));
-      if (d?.data?.currentMember?.email) email = d.data.currentMember.email;
-    } catch(e) {}
-
-    // Try with auth_token as query param
-    if (!email) {
-      try {
-        const r = await fetch(`https://myreallifemoney.memberful.com/api/graphql?auth_token=${tokenData.access_token}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: '{ currentMember { id email } }' }),
-        });
-        const d = await r.json();
-        console.log('GQL auth_token param:', JSON.stringify(d).substring(0, 200));
-        if (d?.data?.currentMember?.email) email = d.data.currentMember.email;
-      } catch(e) {}
+      const memberRes = await fetch('https://myreallifemoney.memberful.com/api/json/v1/member?auth_token=' + tokenData.access_token);
+      const memberData = await memberRes.json();
+      console.log('Member API:', JSON.stringify(memberData).substring(0, 500));
+      if (memberData && memberData.member && memberData.member.email) {
+        email = memberData.member.email;
+        const subs = memberData.member.subscriptions || [];
+        hasAccess = subs.some(function(sub) { return sub.active && sub.plan && sub.plan.id === 147763; });
+        console.log('Plan check:', JSON.stringify({ email: email, hasAccess: hasAccess, plans: subs.map(function(s) { return s.plan && s.plan.id; }) }));
+      }
+    } catch(e) {
+      console.log('Member API error:', e.message);
     }
-
-    // Successful OAuth exchange = verified Memberful member
-    // Use placeholder if email lookup failed — dashboard access is granted
     if (!email) {
-      console.log('Email lookup failed — granting access to verified OAuth member');
-      email = 'rlm_member_verified';
+      return res.redirect('/?error=auth_failed');
+    }
+    if (!hasAccess) {
+      return res.redirect('/?error=no_plan');
+    }
     }
 
     // Step 3: Set signed session cookie
