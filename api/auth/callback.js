@@ -2,7 +2,7 @@ import crypto from 'crypto';
 
 export default async function handler(req, res) {
   const { code } = req.query;
-  if (!code) return res.redirect('/?error=no_code');
+ console.log('Callback params:', JSON.stringify(req.query));
 
   const clientId = process.env.MEMBERFUL_CLIENT_ID;
   const clientSecret = process.env.MEMBERFUL_CLIENT_SECRET;
