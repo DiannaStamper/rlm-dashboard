@@ -12,7 +12,7 @@ const C = {
 };
 
 // =====================================================================
-// JOURNEY SYSTEM PROMPT — Full personality from RLM Coach | Journey
+// JOURNEY SYSTEM PROMPT
 // =====================================================================
 const JOURNEY_SYSTEM_PROMPT = `
 You are RLM Coach | Journey — a warm, honest, one-on-one financial companion built by Dianna Stamper of Real Life Money (myReallifemoney.com).
@@ -101,7 +101,7 @@ Do not give legal or financial advice. Help them understand what they are lookin
 
 IMAGE AND VOICE CAPABILITY
 
-If they share an image — a statement, a bill, a document, a screenshot — look at it carefully. Help them understand what it says, what it means for their picture, and what their next right step is. Never judge what you see. Just help them see it clearly. If they are not sure what a charge or letter is, help them identify it and understand their options.
+If they share an image — a statement, a bill, a document, a screenshot — look at it carefully. Help them understand what it says, what it means for their picture, and what their next right step is. Never judge what you see. Just help them see it clearly.
 
 DIANNA'S STORIES
 
@@ -141,9 +141,7 @@ Look First before you fix. Ask before you answer. See where someone actually is 
 
 DASHBOARD CONTEXT
 
-You are embedded inside the RLM Dashboard — a web platform that makes the Look First method automatic. You can see which tab the user is currently on and a summary of their financial data. You open each conversation with a warm, tab-aware greeting that notices where they are without diagnosing what you see. You wait for them to bring up what matters. You do not lead with the numbers — you lead with presence.
-
-If they ask you to look at something specific in their data, you may reference it. Otherwise: presence before data. Kindness before analysis.
+You are embedded inside the RLM Dashboard. You open each conversation with a warm, tab-aware greeting. You wait for them to bring up what matters. Presence before data. Kindness before analysis.
 
 TAB GREETINGS (match to current tab):
 - Everything Page: warm curiosity about the mind sweep
@@ -163,6 +161,7 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
 const fmtD = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const getSuffix = n => { if (n >= 11 && n <= 13) return 'th'; switch (n % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; } };
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
 const CATS = ['Credit', 'Debt/Loan', 'Subscription', 'Utility', 'Insurance', 'Housing', 'Transportation', 'Food', 'Medical', 'Other'];
 const STATS = ['Confirmed', 'Estimate', 'Zero Balance'];
@@ -248,7 +247,7 @@ function BillForm({ bill, onSave, onCancel }) {
   const isCD = ['Credit', 'Debt/Loan'].includes(form.category);
   return (
     <div style={{ background: C.cream, borderRadius: 10, padding: 14, border: `1.5px solid ${C.creamDark}`, marginBottom: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr 1fr' : '2fr 1fr 1fr 1fr 1fr', gap:8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 640 ? '1fr 1fr' : '2fr 1fr 1fr 1fr 1fr', gap: 8 }}>
         <FI label="Company / Bill Name" value={form.company} onChange={e => set('company', e.target.value)} placeholder="e.g. Electric Co." />
         <FI label="Category" value={form.category} onChange={e => set('category', e.target.value)} options={CATS} />
         <FI label="Status" value={form.status} onChange={e => set('status', e.target.value)} options={STATS} />
@@ -629,29 +628,46 @@ const DAY_THEMES = [
 const PAY_METHODS = ['Card', 'Cash', 'Debit', 'Venmo/PayPal', 'Other'];
 const TRACKER_EMPTY = { description: '', method: 'Card', amount: '', notes: '' };
 
-function SpendingTracker({ entries, setEntries }) {
+function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
   const [adding, setAdding] = useState(null);
   const [form, setForm] = useState({ ...TRACKER_EMPTY });
   const [guess, setGuess] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today); d.setDate(d.getDate() - (6 - i)); return d;
-  });
+  // Days run FORWARD from startDate (Day 1 = start, Day 7 = start + 6)
+  const days = startDate ? Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(startDate + 'T00:00:00');
+    d.setDate(d.getDate() + i);
+    return d;
+  }) : [];
 
-  const dayStr = d => d.toISOString().slice(0, 10);
+  const dayStr = d => {
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const dy = String(d.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${dy}`;
+  };
   const dayLabel = d => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const todayStr = dayStr(new Date());
 
-  const weekEntries = entries.filter(e => {
+  const allEntries = startDate ? entries.filter(e => {
     const d = new Date(e.date + 'T00:00:00');
-    return d >= days[0] && d <= days[6];
-  });
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(startDate + 'T00:00:00');
+    end.setDate(end.getDate() + 6);
+    return d >= start && d <= end;
+  }) : [];
 
-  const total7 = weekEntries.reduce((s, e) => s + (+e.amount || 0), 0);
+  const total7 = allEntries.reduce((s, e) => s + (+e.amount || 0), 0);
+
+  const journeyComplete = startDate ? (() => {
+    const end = new Date(startDate + 'T00:00:00');
+    end.setDate(end.getDate() + 7);
+    return today >= end;
+  })() : false;
 
   const save = (dateStr) => {
     if (!form.amount || !form.description) return;
@@ -662,49 +678,100 @@ function SpendingTracker({ entries, setEntries }) {
 
   const del = id => setEntries(e => e.filter(x => x.id !== id));
 
+  const handleReset = () => {
+    setEntries([]);
+    setStartDate('');
+    setConfirmReset(false);
+    setGuess('');
+  };
+
+  // ── PRE-START SCREEN ──
+  if (!startDate) {
+    return (
+      <div>
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>7-Day Money Discovery Tracker</h2>
+          <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>For the next seven days, write down every purchase you make. No judgment. No changes. Just look.</p>
+        </div>
+        <Card style={{ textAlign: 'center', padding: 48 }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
+          <h3 style={{ color: C.green, fontFamily: 'Georgia,serif', margin: '0 0 10px', fontSize: 20 }}>Before You Begin</h3>
+          <p style={{ color: C.charcoalLight, maxWidth: 400, margin: '0 auto 22px', lineHeight: 1.7, fontSize: 13 }}>
+            This is your seven-day discovery. You are not changing anything yet. You are just looking.<br />
+            Write down every purchase — big, small, the coffee, the Target run, all of it. No judgment here.
+          </p>
+          <div style={{ maxWidth: 300, margin: '0 auto 24px', textAlign: 'left' }}>
+            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 5 }}>My best guess — weekly spending total</div>
+            <input
+              type="number"
+              value={guess}
+              onChange={e => setGuess(e.target.value)}
+              placeholder="$0.00"
+              style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 14, background: 'white', boxSizing: 'border-box' }}
+            />
+          </div>
+          <Btn onClick={() => setStartDate(todayISO())} style={{ fontSize: 15, padding: '12px 28px' }}>
+            Start My 7-Day Journey
+          </Btn>
+          <p style={{ color: C.charcoalLight, fontSize: 11, marginTop: 14 }}>Today becomes Day 1. Each day unlocks as it arrives.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── ACTIVE TRACKER ──
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>7-Day Money Discovery Tracker</h2>
-        <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>For the next seven days, write down every purchase you make. No judgment. No changes. Just look.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>7-Day Money Discovery Tracker</h2>
+          <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>
+            Journey started {new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+            {guess ? ` · Best guess: ${fmt(+guess)}` : ''}
+          </p>
+        </div>
+        {journeyComplete && !confirmReset && (
+          <Btn variant="ghostDark" small onClick={() => setConfirmReset(true)}>Start New Journey</Btn>
+        )}
       </div>
 
-      {/* Before You Begin */}
-      <Card style={{ background: C.creamDark, marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.espresso, marginBottom: 10, fontSize: 13, textTransform: 'uppercase', letterSpacing: .5 }}>Before You Begin</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>My best guess — weekly spending total</div>
-            <input type="number" value={guess} onChange={e => setGuess(e.target.value)} placeholder="$0.00"
-              style={{ width: '100%', padding: '7px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
+      {confirmReset && (
+        <Card style={{ background: '#fff3cd', border: `1.5px solid ${C.gold}`, marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, color: C.espresso, marginBottom: 6 }}>Start a new journey?</div>
+          <p style={{ fontSize: 12, color: C.charcoalLight, margin: '0 0 12px' }}>This will clear your current tracker entries and start fresh from today.</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn small variant="danger" onClick={handleReset}>Yes, start fresh</Btn>
+            <Btn small variant="ghostDark" onClick={() => setConfirmReset(false)}>Cancel</Btn>
           </div>
-          {total7 > 0 && guess && (
-            <div style={{ display: 'flex', alignItems: 'center', paddingTop: 18 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: +guess >= total7 ? C.green : C.espresso }}>
-                {+guess >= total7
-                  ? `✓ You're ${fmt(+guess - total7)} under your guess so far.`
-                  : `You're ${fmt(total7 - +guess)} over your guess so far.`}
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
+        </Card>
+      )}
 
-      {/* Day Blocks */}
+      {journeyComplete && !confirmReset && (
+        <Card style={{ background: C.creamDark, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.espresso, marginBottom: 6, fontSize: 15 }}>🎉 You finished your 7-day discovery.</div>
+          <p style={{ fontSize: 12, color: C.charcoalLight, margin: '0 0 4px' }}>
+            Total spent: <strong style={{ color: C.espresso }}>{fmt(total7)}</strong>
+            {guess ? `. Your guess was ${fmt(+guess)} — you came in ${+guess >= total7 ? `${fmt(+guess - total7)} under.` : `${fmt(total7 - +guess)} over.`}` : '.'}
+          </p>
+          <p style={{ fontSize: 12, color: C.charcoalLight, margin: 0 }}>The looking is never as bad as the not knowing. Ready to start another week?</p>
+        </Card>
+      )}
+
       {days.map((day, i) => {
         const ds = dayStr(day);
         const theme = DAY_THEMES[i];
-        const dayE = weekEntries.filter(e => e.date === ds);
+        const dayE = allEntries.filter(e => e.date === ds);
         const dayTotal = dayE.reduce((s, e) => s + (+e.amount || 0), 0);
-        const isToday = ds === todayStr;
-        const isFuture = day > new Date();
+        const isToday = ds === todayISO();
+        const isFuture = day > today;
+
         return (
-          <Card key={ds} style={{ borderLeft: `4px solid ${isToday ? C.gold : C.green}`, opacity: isFuture ? .45 : 1 }}>
+          <Card key={ds} style={{ borderLeft: `4px solid ${isToday ? C.gold : isFuture ? C.creamDark : C.green}`, opacity: isFuture ? .42 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                  <span style={{ background: isToday ? C.gold : C.green, color: 'white', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase' }}>Day {i + 1}</span>
-                  <span style={{ fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 14, color: isToday ? C.gold : C.green }}>{theme.name}</span>
+                  <span style={{ background: isToday ? C.gold : isFuture ? C.creamDark : C.green, color: isFuture ? C.charcoalLight : 'white', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase' }}>Day {i + 1}</span>
+                  <span style={{ fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 14, color: isToday ? C.gold : isFuture ? C.charcoalLight : C.green }}>{theme.name}</span>
                   {isToday && <span style={{ fontSize: 10, background: C.gold, color: 'white', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>Today</span>}
                 </div>
                 <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic' }}>{dayLabel(day)} · {theme.prompt}</div>
@@ -714,10 +781,10 @@ function SpendingTracker({ entries, setEntries }) {
                 {!isFuture && adding !== ds && (
                   <Btn small variant="ghost" onClick={() => { setForm({ ...TRACKER_EMPTY }); setAdding(ds); }}>+ Add</Btn>
                 )}
+                {isFuture && <div style={{ fontSize: 11, color: C.charcoalLight }}>Unlocks {dayLabel(day)}</div>}
               </div>
             </div>
 
-            {/* Entry Form */}
             {adding === ds && (
               <div style={{ background: C.cream, borderRadius: 8, padding: 10, marginBottom: 8, border: `1px solid ${C.creamDark}` }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 7 }}>
@@ -733,10 +800,10 @@ function SpendingTracker({ entries, setEntries }) {
               </div>
             )}
 
-            {/* Entries Table */}
             {dayE.length === 0 && adding !== ds && !isFuture && (
               <div style={{ fontSize: 12, color: C.charcoalLight, padding: '2px 0 4px' }}>Nothing logged yet.</div>
             )}
+
             {dayE.length > 0 && (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -771,7 +838,6 @@ function SpendingTracker({ entries, setEntries }) {
         );
       })}
 
-      {/* 7-Day Grand Total */}
       {total7 > 0 && (
         <Card style={{ background: C.green }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -790,7 +856,7 @@ function SpendingTracker({ entries, setEntries }) {
 }
 
 // =====================================================================
-// COACH PANEL — Full Journey personality + tab-aware greetings + image upload
+// COACH PANEL
 // =====================================================================
 function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
   const [msgs, setMsgs] = useState([]);
@@ -806,10 +872,7 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const r = await window.storage.get('rlm_username');
-        if (r?.value) setUserName(r.value);
-      } catch {}
+      try { const r = await window.storage.get('rlm_username'); if (r?.value) setUserName(r.value); } catch {}
     };
     load();
   }, []);
@@ -834,8 +897,7 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
     const reader = new FileReader();
     reader.onload = ev => {
       const dataUrl = ev.target.result;
-      const base64 = dataUrl.split(',')[1];
-      setImgData(base64);
+      setImgData(dataUrl.split(',')[1]);
       setImgType(file.type || 'image/jpeg');
       setImgPreview(dataUrl);
     };
@@ -856,52 +918,32 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
 
   const send = async () => {
     if ((!inp.trim() && !imgData) || loading) return;
-
     if (awaitingName) {
       const name = inp.trim() || 'friend';
       setUserName(name);
       try { await window.storage.set('rlm_username', name); } catch {}
       setAwaitingName(false);
       const greeting = TAB_GREETINGS[activeTab]?.(name) || `Nice to meet you, ${name}. I'm here whenever you're ready.`;
-      setMsgs(m => [...m,
-        { role: 'user', content: name },
-        { role: 'assistant', content: greeting }
-      ]);
+      setMsgs(m => [...m, { role: 'user', content: name }, { role: 'assistant', content: greeting }]);
       setInp('');
       return;
     }
-
     const userContent = imgData
-      ? [
-          { type: 'image', source: { type: 'base64', media_type: imgType, data: imgData } },
-          ...(inp.trim() ? [{ type: 'text', text: inp.trim() }] : [{ type: 'text', text: 'What is this?' }])
-        ]
+      ? [{ type: 'image', source: { type: 'base64', media_type: imgType, data: imgData } }, ...(inp.trim() ? [{ type: 'text', text: inp.trim() }] : [{ type: 'text', text: 'What is this?' }])]
       : inp.trim();
-
     const displayMsg = { role: 'user', content: inp.trim() || '📷 Image shared', imgPreview };
     const apiMsg = { role: 'user', content: userContent };
-
     const allDisplay = [...msgs, displayMsg];
-    const allApi = msgs
-      .filter(m => !m.imgPreview)
-      .map(m => ({ role: m.role, content: m.content }))
-      .concat(apiMsg);
-
+    const allApi = msgs.filter(m => !m.imgPreview).map(m => ({ role: m.role, content: m.content })).concat(apiMsg);
     setMsgs(allDisplay);
     setInp('');
     clearImage();
     setLoading(true);
-
     try {
       const res = await fetch('/api/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
-          system: `${JOURNEY_SYSTEM_PROMPT}\n\nUser context right now: ${buildCtx()}`,
-          messages: allApi.slice(1)
-        })
+        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1024, system: `${JOURNEY_SYSTEM_PROMPT}\n\nUser context right now: ${buildCtx()}`, messages: allApi.slice(1) })
       });
       const data = await res.json();
       const reply = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || 'Try again?';
@@ -913,14 +955,8 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
   };
 
   if (!isOpen) return null;
-
   return (
-    <div style={{
-      position: 'fixed', right: 18, bottom: 72, width: 370, height: 520,
-      background: 'white', borderRadius: 16, boxShadow: '0 10px 40px rgba(0,0,0,.2)',
-      display: 'flex', flexDirection: 'column', zIndex: 1000, overflow: 'hidden',
-      border: `2px solid ${C.green}`
-    }}>
+    <div style={{ position: 'fixed', right: 18, bottom: 72, width: 370, height: 520, background: 'white', borderRadius: 16, boxShadow: '0 10px 40px rgba(0,0,0,.2)', display: 'flex', flexDirection: 'column', zIndex: 1000, overflow: 'hidden', border: `2px solid ${C.green}` }}>
       <div style={{ background: C.green, padding: '11px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <div>
           <div style={{ color: 'white', fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 14 }}>RLM Coach | Journey</div>
@@ -928,17 +964,10 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
         </div>
         <button onClick={onClose} style={{ color: 'white', background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
       </div>
-
       <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 9 }}>
         {msgs.map((m, i) => (
-          <div key={i} style={{
-            maxWidth: '88%', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-            background: m.role === 'user' ? C.green : C.cream,
-            color: m.role === 'user' ? 'white' : C.charcoal,
-            padding: '8px 12px', borderRadius: m.role === 'user' ? '13px 13px 3px 13px' : '13px 13px 13px 3px',
-            fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap'
-          }}>
-            {m.imgPreview && <img src={m.imgPreview} alt="Shared bill" style={{ maxWidth: '100%', borderRadius: 6, marginBottom: m.content && m.content !== '📷 Image shared' ? 6 : 0 }} />}
+          <div key={i} style={{ maxWidth: '88%', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? C.green : C.cream, color: m.role === 'user' ? 'white' : C.charcoal, padding: '8px 12px', borderRadius: m.role === 'user' ? '13px 13px 3px 13px' : '13px 13px 13px 3px', fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+            {m.imgPreview && <img src={m.imgPreview} alt="Shared" style={{ maxWidth: '100%', borderRadius: 6, marginBottom: m.content && m.content !== '📷 Image shared' ? 6 : 0 }} />}
             {m.content && m.content !== '📷 Image shared' && m.content}
             {m.content === '📷 Image shared' && !m.imgPreview && '📷 Image shared'}
           </div>
@@ -946,7 +975,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
         {loading && <div style={{ alignSelf: 'flex-start', background: C.cream, padding: '8px 12px', borderRadius: '13px 13px 13px 3px', fontSize: 12, color: C.charcoalLight }}>Thinking…</div>}
         <div ref={endRef} />
       </div>
-
       {imgPreview && (
         <div style={{ padding: '8px 12px', background: C.creamDark, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <img src={imgPreview} alt="Preview" style={{ height: 40, width: 40, objectFit: 'cover', borderRadius: 4 }} />
@@ -954,31 +982,11 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
           <button onClick={clearImage} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 16 }}>✕</button>
         </div>
       )}
-
       <div style={{ padding: '9px 10px', borderTop: `1px solid ${C.creamDark}`, display: 'flex', gap: 7, flexShrink: 0 }}>
-        <button
-          onClick={() => fileRef.current?.click()}
-          title="Share a bill or statement"
-          style={{ background: C.cream, border: `1px solid ${C.creamDark}`, borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}
-        >📎</button>
+        <button onClick={() => fileRef.current?.click()} title="Share a bill or statement" style={{ background: C.cream, border: `1px solid ${C.creamDark}`, borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>📎</button>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display: 'none' }} />
-        <input
-          value={inp}
-          onChange={e => setInp(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-          placeholder="Ask anything about your money…"
-          style={{ flex: 1, padding: '7px 11px', border: `1px solid ${C.creamDark}`, borderRadius: 20, fontFamily: 'inherit', fontSize: 12, outline: 'none' }}
-        />
-        <button
-          onClick={send}
-          disabled={loading || (!inp.trim() && !imgData)}
-          style={{
-            background: (inp.trim() || imgData) && !loading ? C.green : C.creamDark,
-            color: (inp.trim() || imgData) && !loading ? 'white' : C.charcoalLight,
-            border: 'none', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer',
-            fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s'
-          }}
-        >→</button>
+        <input value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()} placeholder="Ask anything about your money…" style={{ flex: 1, padding: '7px 11px', border: `1px solid ${C.creamDark}`, borderRadius: 20, fontFamily: 'inherit', fontSize: 12, outline: 'none' }} />
+        <button onClick={send} disabled={loading || (!inp.trim() && !imgData)} style={{ background: (inp.trim() || imgData) && !loading ? C.green : C.creamDark, color: (inp.trim() || imgData) && !loading ? 'white' : C.charcoalLight, border: 'none', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}>→</button>
       </div>
     </div>
   );
@@ -996,6 +1004,7 @@ export default function App() {
   const [snow, setSnow] = useState('');
   const [aval, setAval] = useState('');
   const [tracker, setTracker] = useState([]);
+  const [trackerStart, setTrackerStart] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
   const [authReady, setAuthReady] = useState(false);
@@ -1009,8 +1018,10 @@ export default function App() {
 
   useEffect(() => {
     const load = async () => {
-      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['tracker', setTracker]];
-      for (const [k, set] of keys) { try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {} }
+      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['tracker', setTracker], ['trackerStart', setTrackerStart]];
+      for (const [k, set] of keys) {
+        try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
+      }
     };
     load();
   }, []);
@@ -1024,6 +1035,7 @@ export default function App() {
   useEffect(() => { sv('snow', snow); }, [snow]);
   useEffect(() => { sv('aval', aval); }, [aval]);
   useEffect(() => { sv('tracker', tracker); }, [tracker]);
+  useEffect(() => { sv('trackerStart', trackerStart); }, [trackerStart]);
 
   if (window.location.pathname === '/verify') return <VerifyPage />;
   if (!authReady) return (
@@ -1049,32 +1061,23 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: C.cream, fontFamily: '"Segoe UI", system-ui, sans-serif', color: C.charcoal }}>
-      {/* Header */}
       <div style={{ background: C.green, padding: '12px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%', marginRight: 10 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%' }} />
           <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Dashboard</div>
           {window.innerWidth >= 640 && <div style={{ color: C.sageLight, fontSize: 11, fontStyle: 'italic' }}>Living life. With money. For real.</div>}
         </div>
         <div style={{ color: C.sageLight, fontSize: 11, fontStyle: 'italic' }}>Living life. With money. For real.</div>
       </div>
 
-      {/* Tab Nav */}
       <div style={{ background: 'white', borderBottom: `1px solid ${C.creamDark}`, overflowX: 'auto' }}>
         <div style={{ display: 'flex', padding: '0 18px', minWidth: 'max-content' }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: '11px 15px', border: 'none', background: 'transparent', cursor: 'pointer',
-              fontFamily: 'inherit', fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
-              color: tab === t.id ? C.green : C.charcoalLight, whiteSpace: 'nowrap',
-              borderBottom: `3px solid ${tab === t.id ? C.green : 'transparent'}`,
-              transition: 'all .15s'
-            }}>{t.label}</button>
+            <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '11px 15px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: tab === t.id ? 700 : 500, color: tab === t.id ? C.green : C.charcoalLight, whiteSpace: 'nowrap', borderBottom: `3px solid ${tab === t.id ? C.green : 'transparent'}`, transition: 'all .15s' }}>{t.label}</button>
           ))}
         </div>
       </div>
 
-      {/* Page Content */}
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
         {tab === 'payday'     && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} />}
@@ -1083,29 +1086,14 @@ export default function App() {
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'tracker'    && <SpendingTracker entries={tracker} setEntries={setTracker} />}
+        {tab === 'tracker'    && <SpendingTracker entries={tracker} setEntries={setTracker} startDate={trackerStart} setStartDate={setTrackerStart} />}
       </div>
 
-      {/* Coach FAB */}
-      <button onClick={() => setCoach(o => !o)} style={{
-        position: 'fixed', bottom: 18, right: 18,
-        background: coach ? C.charcoal : C.green, color: 'white',
-        border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer',
-        fontFamily: 'inherit', fontWeight: 700, fontSize: 13,
-        boxShadow: '0 4px 20px rgba(43,94,63,.4)',
-        display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s'
-      }}>
+      <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
         {coach ? '✕ Close Coach' : '💬 Ask Coach'}
       </button>
 
-      {/* Coach Panel */}
-      <CoachPanel
-        bills={bills}
-        paySettings={pay}
-        activeTab={tab}
-        isOpen={coach}
-        onClose={() => setCoach(false)}
-      />
+      <CoachPanel bills={bills} paySettings={pay} activeTab={tab} isOpen={coach} onClose={() => setCoach(false)} />
     </div>
   );
 }
