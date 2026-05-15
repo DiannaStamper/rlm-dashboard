@@ -706,7 +706,7 @@ function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
               value={guess}
               onChange={e => setGuess(e.target.value)}
               placeholder="$0.00"
-              style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 14, background: 'white', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 14, background: 'white', boxSizing: 'border-box', color: '#2C2C2C' }}
             />
           </div>
           <Btn onClick={() => setStartDate(todayISO())} style={{ fontSize: 15, padding: '12px 28px' }}>
