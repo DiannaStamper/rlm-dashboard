@@ -57,6 +57,7 @@ SNOWBALL — debt payoff plan sorted smallest balance first. Fast wins. Big moti
 AVALANCHE — debt payoff plan sorted highest interest rate first. Mathematically the cheapest path.
 GOALS — pick one thing to work toward. The math builds itself.
 SINKING FUNDS — named savings buckets for big expenses you know are coming.
+7-DAY TRACKER — log every purchase for seven days. No judgment. No changes. Just look.
 
 NOT A DIET
 
@@ -151,6 +152,7 @@ TAB GREETINGS (match to current tab):
 - Snowball / Avalanche: warm curiosity about the plan
 - Goals: warm curiosity about what they are working toward
 - Sinking Funds: warm curiosity about what is coming up
+- 7-Day Tracker: warm curiosity about what they are noticing this week
 `.trim();
 
 // =====================================================================
@@ -174,6 +176,7 @@ const TAB_GREETINGS = {
   avalanche:  name => `Hi ${name} — you're looking at your payoff plan. Want to talk through it?`,
   goals:      name => `Hi ${name} — you're on your goals page. What are you working toward?`,
   funds:      name => `Hi ${name} — you're building your funds. What's coming up?`,
+  tracker:    name => `Hi ${name} — you're tracking your week. What are you noticing?`,
 };
 
 function getPeriods(freq, startStr, amt) {
@@ -611,6 +614,182 @@ function SinkingFunds({ funds, setFunds }) {
 }
 
 // =====================================================================
+// 7-DAY SPENDING TRACKER
+// =====================================================================
+const DAY_THEMES = [
+  { name: 'Wake-Up Day',     prompt: 'Where did my money go today?' },
+  { name: 'The Trigger',     prompt: 'What was I feeling right before I spent?' },
+  { name: 'The Pattern',     prompt: 'Do I see a pattern forming?' },
+  { name: 'The Why',         prompt: 'Why did I really buy that?' },
+  { name: 'The Feeling',     prompt: 'How do I feel about this week so far?' },
+  { name: 'The Reflection',  prompt: 'What will I do differently next week?' },
+  { name: 'The Big Picture', prompt: 'What surprised me most?' },
+];
+
+const PAY_METHODS = ['Card', 'Cash', 'Debit', 'Venmo/PayPal', 'Other'];
+const TRACKER_EMPTY = { description: '', method: 'Card', amount: '', notes: '' };
+
+function SpendingTracker({ entries, setEntries }) {
+  const [adding, setAdding] = useState(null);
+  const [form, setForm] = useState({ ...TRACKER_EMPTY });
+  const [guess, setGuess] = useState('');
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today); d.setDate(d.getDate() - (6 - i)); return d;
+  });
+
+  const dayStr = d => d.toISOString().slice(0, 10);
+  const dayLabel = d => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const todayStr = dayStr(new Date());
+
+  const weekEntries = entries.filter(e => {
+    const d = new Date(e.date + 'T00:00:00');
+    return d >= days[0] && d <= days[6];
+  });
+
+  const total7 = weekEntries.reduce((s, e) => s + (+e.amount || 0), 0);
+
+  const save = (dateStr) => {
+    if (!form.amount || !form.description) return;
+    setEntries(e => [...e, { ...form, id: uid(), date: dateStr, amount: +form.amount }]);
+    setForm({ ...TRACKER_EMPTY });
+    setAdding(null);
+  };
+
+  const del = id => setEntries(e => e.filter(x => x.id !== id));
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>7-Day Money Discovery Tracker</h2>
+        <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>For the next seven days, write down every purchase you make. No judgment. No changes. Just look.</p>
+      </div>
+
+      {/* Before You Begin */}
+      <Card style={{ background: C.creamDark, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.espresso, marginBottom: 10, fontSize: 13, textTransform: 'uppercase', letterSpacing: .5 }}>Before You Begin</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>My best guess — weekly spending total</div>
+            <input type="number" value={guess} onChange={e => setGuess(e.target.value)} placeholder="$0.00"
+              style={{ width: '100%', padding: '7px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', boxSizing: 'border-box' }} />
+          </div>
+          {total7 > 0 && guess && (
+            <div style={{ display: 'flex', alignItems: 'center', paddingTop: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: +guess >= total7 ? C.green : C.espresso }}>
+                {+guess >= total7
+                  ? `✓ You're ${fmt(+guess - total7)} under your guess so far.`
+                  : `You're ${fmt(total7 - +guess)} over your guess so far.`}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Day Blocks */}
+      {days.map((day, i) => {
+        const ds = dayStr(day);
+        const theme = DAY_THEMES[i];
+        const dayE = weekEntries.filter(e => e.date === ds);
+        const dayTotal = dayE.reduce((s, e) => s + (+e.amount || 0), 0);
+        const isToday = ds === todayStr;
+        const isFuture = day > new Date();
+        return (
+          <Card key={ds} style={{ borderLeft: `4px solid ${isToday ? C.gold : C.green}`, opacity: isFuture ? .45 : 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <span style={{ background: isToday ? C.gold : C.green, color: 'white', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase' }}>Day {i + 1}</span>
+                  <span style={{ fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 14, color: isToday ? C.gold : C.green }}>{theme.name}</span>
+                  {isToday && <span style={{ fontSize: 10, background: C.gold, color: 'white', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>Today</span>}
+                </div>
+                <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic' }}>{dayLabel(day)} · {theme.prompt}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                {dayTotal > 0 && <div style={{ fontWeight: 700, fontSize: 15, color: C.espresso, marginBottom: 4 }}>{fmt(dayTotal)}</div>}
+                {!isFuture && adding !== ds && (
+                  <Btn small variant="ghost" onClick={() => { setForm({ ...TRACKER_EMPTY }); setAdding(ds); }}>+ Add</Btn>
+                )}
+              </div>
+            </div>
+
+            {/* Entry Form */}
+            {adding === ds && (
+              <div style={{ background: C.cream, borderRadius: 8, padding: 10, marginBottom: 8, border: `1px solid ${C.creamDark}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 7 }}>
+                  <FI label="What I Bought / Where" value={form.description} onChange={e => setF('description', e.target.value)} placeholder="e.g. Target, morning coffee" />
+                  <FI label="Card / Cash" value={form.method} onChange={e => setF('method', e.target.value)} options={PAY_METHODS} />
+                  <FI label="Amount ($)" value={form.amount} onChange={e => setF('amount', e.target.value)} type="number" placeholder="0.00" />
+                  <FI label="Notes" value={form.notes} onChange={e => setF('notes', e.target.value)} placeholder="Optional" />
+                </div>
+                <div style={{ display: 'flex', gap: 7, marginTop: 4 }}>
+                  <Btn small onClick={() => save(ds)}>Save</Btn>
+                  <Btn small variant="ghostDark" onClick={() => setAdding(null)}>Cancel</Btn>
+                </div>
+              </div>
+            )}
+
+            {/* Entries Table */}
+            {dayE.length === 0 && adding !== ds && !isFuture && (
+              <div style={{ fontSize: 12, color: C.charcoalLight, padding: '2px 0 4px' }}>Nothing logged yet.</div>
+            )}
+            {dayE.length > 0 && (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>
+                      {['What I Bought / Where', 'Card / Cash', 'Amount', 'Notes', ''].map((h, j) => (
+                        <th key={j} style={{ padding: '5px 7px', textAlign: j === 2 ? 'right' : 'left', color: C.charcoalLight, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dayE.map(e => (
+                      <tr key={e.id} style={{ borderBottom: `1px solid ${C.cream}` }}>
+                        <td style={{ padding: '6px 7px', fontWeight: 600 }}>{e.description}</td>
+                        <td style={{ padding: '6px 7px', color: C.charcoalLight }}>{e.method}</td>
+                        <td style={{ padding: '6px 7px', fontWeight: 700, color: C.espresso, textAlign: 'right' }}>{fmt(e.amount)}</td>
+                        <td style={{ padding: '6px 7px', color: C.charcoalLight, fontSize: 11 }}>{e.notes || '—'}</td>
+                        <td style={{ padding: '6px 7px', textAlign: 'right' }}>
+                          <button onClick={() => del(e.id)} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 13 }}>✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ paddingTop: 7, borderTop: `1px solid ${C.creamDark}`, display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                  <span style={{ fontSize: 11, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginRight: 12 }}>Daily Total</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.espresso }}>{fmt(dayTotal)}</span>
+                </div>
+              </div>
+            )}
+          </Card>
+        );
+      })}
+
+      {/* 7-Day Grand Total */}
+      {total7 > 0 && (
+        <Card style={{ background: C.green }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: 'white', fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 16 }}>7-Day Grand Total</div>
+            <div style={{ color: 'white', fontWeight: 700, fontSize: 24 }}>{fmt(total7)}</div>
+          </div>
+          {guess && (
+            <div style={{ color: C.sageLight, fontSize: 12, marginTop: 5 }}>
+              Your guess was {fmt(+guess)}. {+guess >= total7 ? `You came in ${fmt(+guess - total7)} under.` : `You came in ${fmt(total7 - +guess)} over.`}
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
 // COACH PANEL — Full Journey personality + tab-aware greetings + image upload
 // =====================================================================
 function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
@@ -619,13 +798,12 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const [awaitingName, setAwaitingName] = useState(false);
-  const [imgData, setImgData] = useState(null);   // base64 string
-  const [imgType, setImgType] = useState(null);   // mime type
-  const [imgPreview, setImgPreview] = useState(null); // object URL for preview
+  const [imgData, setImgData] = useState(null);
+  const [imgType, setImgType] = useState(null);
+  const [imgPreview, setImgPreview] = useState(null);
   const endRef = useRef(null);
   const fileRef = useRef(null);
 
-  // Load username from storage on mount
   useEffect(() => {
     const load = async () => {
       try {
@@ -636,7 +814,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
     load();
   }, []);
 
-  // When coach opens, set the opening message
   useEffect(() => {
     if (!isOpen) return;
     if (!userName) {
@@ -651,7 +828,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, loading]);
 
-  // Handle image selection
   const handleImage = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -664,13 +840,11 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
       setImgPreview(dataUrl);
     };
     reader.readAsDataURL(file);
-    // Reset file input so same file can be re-selected
     e.target.value = '';
   };
 
   const clearImage = () => { setImgData(null); setImgType(null); setImgPreview(null); };
 
-  // Build context summary (does not diagnose — just gives coach the numbers)
   const buildCtx = () => {
     const active = bills.filter(b => b.status !== 'Zero Balance');
     const tM = active.reduce((s, b) => s + (+b.amount || 0), 0);
@@ -683,7 +857,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
   const send = async () => {
     if ((!inp.trim() && !imgData) || loading) return;
 
-    // Handle name capture
     if (awaitingName) {
       const name = inp.trim() || 'friend';
       setUserName(name);
@@ -698,7 +871,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
       return;
     }
 
-    // Build user message — text only or text + image
     const userContent = imgData
       ? [
           { type: 'image', source: { type: 'base64', media_type: imgType, data: imgData } },
@@ -728,7 +900,7 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
           system: `${JOURNEY_SYSTEM_PROMPT}\n\nUser context right now: ${buildCtx()}`,
-          messages: allApi.slice(1) // skip the opening assistant message
+          messages: allApi.slice(1)
         })
       });
       const data = await res.json();
@@ -749,7 +921,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
       display: 'flex', flexDirection: 'column', zIndex: 1000, overflow: 'hidden',
       border: `2px solid ${C.green}`
     }}>
-      {/* Header */}
       <div style={{ background: C.green, padding: '11px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <div>
           <div style={{ color: 'white', fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 14 }}>RLM Coach | Journey</div>
@@ -758,7 +929,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
         <button onClick={onClose} style={{ color: 'white', background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
       </div>
 
-      {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 9 }}>
         {msgs.map((m, i) => (
           <div key={i} style={{
@@ -777,7 +947,6 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
         <div ref={endRef} />
       </div>
 
-      {/* Image preview bar */}
       {imgPreview && (
         <div style={{ padding: '8px 12px', background: C.creamDark, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <img src={imgPreview} alt="Preview" style={{ height: 40, width: 40, objectFit: 'cover', borderRadius: 4 }} />
@@ -786,16 +955,13 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
         </div>
       )}
 
-      {/* Input bar */}
       <div style={{ padding: '9px 10px', borderTop: `1px solid ${C.creamDark}`, display: 'flex', gap: 7, flexShrink: 0 }}>
-        {/* Image upload button */}
         <button
           onClick={() => fileRef.current?.click()}
           title="Share a bill or statement"
           style={{ background: C.cream, border: `1px solid ${C.creamDark}`, borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}
         >📎</button>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display: 'none' }} />
-
         <input
           value={inp}
           onChange={e => setInp(e.target.value)}
@@ -829,25 +995,26 @@ export default function App() {
   const [goal, setGoal] = useState({ type: 'Pay off a specific debt', which: '', targetDate: '', contribution: '' });
   const [snow, setSnow] = useState('');
   const [aval, setAval] = useState('');
+  const [tracker, setTracker] = useState([]);
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
   const [authReady, setAuthReady] = useState(false);
 
-useEffect(() => {
+  useEffect(() => {
     if (window.location.pathname === '/verify') return;
     fetch('/api/auth/check')
       .then(r => { if (r.ok) setAuthReady(true); else window.location.href = '/api/auth/login'; })
       .catch(() => { window.location.href = '/api/auth/login'; });
   }, []);
 
-  // Persist to storage
   useEffect(() => {
     const load = async () => {
-      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval]];
+      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['tracker', setTracker]];
       for (const [k, set] of keys) { try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {} }
     };
     load();
   }, []);
+
   const sv = async (k, v) => { try { await window.storage.set(`rlm_${k}`, JSON.stringify(v)); } catch {} };
   useEffect(() => { sv('bills', bills); }, [bills]);
   useEffect(() => { sv('pay', pay); }, [pay]);
@@ -856,6 +1023,7 @@ useEffect(() => {
   useEffect(() => { sv('goal', goal); }, [goal]);
   useEffect(() => { sv('snow', snow); }, [snow]);
   useEffect(() => { sv('aval', aval); }, [aval]);
+  useEffect(() => { sv('tracker', tracker); }, [tracker]);
 
   if (window.location.pathname === '/verify') return <VerifyPage />;
   if (!authReady) return (
@@ -867,15 +1035,16 @@ useEffect(() => {
       </div>
     </div>
   );
-  
+
   const TABS = [
     { id: 'everything', label: 'Everything Page' },
-    { id: 'payday', label: 'Payday' },
-    { id: 'debt', label: 'Debt & Credit' },
-    { id: 'snowball', label: 'Snowball' },
-    { id: 'avalanche', label: 'Avalanche' },
-    { id: 'goals', label: 'Goals' },
-    { id: 'funds', label: 'Sinking Funds' },
+    { id: 'payday',     label: 'Payday' },
+    { id: 'debt',       label: 'Debt & Credit' },
+    { id: 'snowball',   label: 'Snowball' },
+    { id: 'avalanche',  label: 'Avalanche' },
+    { id: 'goals',      label: 'Goals' },
+    { id: 'funds',      label: 'Sinking Funds' },
+    { id: 'tracker',    label: '7-Day Tracker' },
   ];
 
   return (
@@ -883,7 +1052,7 @@ useEffect(() => {
       {/* Header */}
       <div style={{ background: C.green, padding: '12px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-<img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%', marginRight: 10 }} />
+          <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%', marginRight: 10 }} />
           <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Dashboard</div>
           {window.innerWidth >= 640 && <div style={{ color: C.sageLight, fontSize: 11, fontStyle: 'italic' }}>Living life. With money. For real.</div>}
         </div>
@@ -908,12 +1077,13 @@ useEffect(() => {
       {/* Page Content */}
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
-        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} />}
-        {tab === 'debt' && <DebtPage bills={bills} />}
-        {tab === 'snowball' && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
-        {tab === 'avalanche' && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
-        {tab === 'goals' && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
-        {tab === 'funds' && <SinkingFunds funds={funds} setFunds={setFunds} />}
+        {tab === 'payday'     && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} />}
+        {tab === 'debt'       && <DebtPage bills={bills} />}
+        {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
+        {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
+        {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
+        {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
+        {tab === 'tracker'    && <SpendingTracker entries={tracker} setEntries={setTracker} />}
       </div>
 
       {/* Coach FAB */}
