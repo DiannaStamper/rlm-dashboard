@@ -226,8 +226,7 @@ function Badge({ text }) {
 }
 
 function FI({ label, value, onChange, type = 'text', placeholder, options }) {
-  const base = { width: '100%', padding: '7px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', boxSizing: 'border-box', outline: 'none' };
-  return (
+  const base = { width: '100%', padding: '7px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', boxSizing: 'border-box', outline: 'none', color: '#2C2C2C' };  return (
     <div style={{ marginBottom: 8 }}>
       {label && <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, marginBottom: 2, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .3 }}>{label}</label>}
       {options ? <select value={value} onChange={onChange} style={base}>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>
