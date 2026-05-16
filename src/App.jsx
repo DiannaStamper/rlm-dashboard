@@ -862,7 +862,8 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
   const [inp, setInp] = useState('');
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
-  const [awaitingName, setAwaitingName] = useState(false);
+const [awaitingName, setAwaitingName] = useState(false);
+const [storageLoaded, setStorageLoaded] = useState(false);
   const [imgData, setImgData] = useState(null);
   const [imgType, setImgType] = useState(null);
   const [imgPreview, setImgPreview] = useState(null);
@@ -871,13 +872,17 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
 
   useEffect(() => {
     const load = async () => {
-      try { const r = await window.storage.get('rlm_username'); if (r?.value) setUserName(r.value); } catch {}
+      try {
+        const r = await window.storage.get('rlm_username');
+        if (r?.value) setUserName(r.value);
+      } catch {}
+      setStorageLoaded(true);
     };
     load();
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !storageLoaded) return;
     if (!userName) {
       setMsgs([{ role: 'assistant', content: "Hi! I'm your RLM Coach. Before we get started — what would you like me to call you?" }]);
       setAwaitingName(true);
