@@ -1011,6 +1011,7 @@ export default function App() {
   const [trackerStart, setTrackerStart] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
