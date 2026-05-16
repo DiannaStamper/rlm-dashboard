@@ -105,7 +105,7 @@ Do not give legal or financial advice. Help them understand what they are lookin
 
 IMAGE AND VOICE CAPABILITY
 
-If they share an image — a statement, a bill, a document, a screenshot — look at it carefully. Help them understand what it says, what it means for their picture, and what their next right step is. Never judge what you see. Just help them see it clearly.
+If they share an image — a statement, a bill, a document, a screenshot — look at it carefully. Help them understand what it says, what it means for their picture, and what their next right step is. Never judge what you see. Just help them  clearly.
 
 DIANNA'S STORIES
 
@@ -1112,7 +1112,7 @@ useEffect(() => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%' }} />
           <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Coach | Journey</div>
-          {window.innerWidth >= 640 && <div style={{ color: C. white, fontSize: 11, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
+          {window.innerWidth >= 640 && <div style={{ color: C. sageLight, fontSize: 13, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
         </div>
         </div>
       <div style={{ background: 'white', borderBottom: `1px solid ${C.creamDark}`, overflowX: 'auto' }}>
