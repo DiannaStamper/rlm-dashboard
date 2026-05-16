@@ -1,13 +1,14 @@
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const HISTORY_LIMIT = 40;
 
-const sbHeaders = {
-  'Authorization': `Bearer ${SUPABASE_KEY}`,
-  'Content-Type': 'application/json',
-};
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY
+  );
+}
 
 function verifySession(cookieHeader) {
   const cookies = {};
@@ -33,57 +34,6 @@ function verifySession(cookieHeader) {
   } catch { return null; }
 }
 
-async function findOrCreateUser(email) {
-  const r = await fetch(
-    `${SUPABASE_URL}/rest/v1/rlm_users?email=eq.${encodeURIComponent(email)}&select=id,full_name`,
-    { headers: sbHeaders }
-  );
-  const users = await r.json();
-  if (users?.[0]) return users[0];
-
-  const cr = await fetch(`${SUPABASE_URL}/rest/v1/rlm_users`, {
-    method: 'POST',
-    headers: { ...sbHeaders, 'Prefer': 'return=representation' },
-    body: JSON.stringify({ email, created_at: new Date().toISOString() })
-  });
-  const newUsers = await cr.json();
-  return newUsers?.[0] || null;
-}
-
-async function getMemory(userId) {
-  const r = await fetch(
-    `${SUPABASE_URL}/rest/v1/rlm_coach_memory?user_id=eq.${userId}&select=id,conversation_history`,
-    { headers: sbHeaders }
-  );
-  const data = await r.json();
-  return data?.[0] || null;
-}
-
-async function saveMemory(userId, userName, history, existingId) {
-  if (existingId) {
-    await fetch(`${SUPABASE_URL}/rest/v1/rlm_coach_memory?id=eq.${existingId}`, {
-      method: 'PATCH',
-      headers: sbHeaders,
-      body: JSON.stringify({
-        conversation_history: history,
-        updated_at: new Date().toISOString()
-      })
-    });
-  } else {
-    await fetch(`${SUPABASE_URL}/rest/v1/rlm_coach_memory`, {
-      method: 'POST',
-      headers: sbHeaders,
-      body: JSON.stringify({
-        user_id: userId,
-        user_name: userName,
-        username: userName,
-        conversation_history: history,
-        updated_at: new Date().toISOString()
-      })
-    });
-  }
-}
-
 function simplifyForStorage(message) {
   if (typeof message.content === 'string') return message;
   if (Array.isArray(message.content)) {
@@ -107,20 +57,52 @@ export default async function handler(req, res) {
     const { model, max_tokens, system, messages } = req.body;
     const latestMessage = messages[messages.length - 1];
 
-    const user = await findOrCreateUser(session.email);
-    const userId = user?.id;
-    const userName = user?.full_name || session.email;
+    const supabase = getSupabase();
 
-    let memoryRecord = null;
-    let storedHistory = [];
-    if (userId) {
-      memoryRecord = await getMemory(userId);
-      storedHistory = memoryRecord?.conversation_history || [];
+    // Find or create user
+    let userId = null;
+    let userName = session.email;
+
+    const { data: users } = await supabase
+      .from('rlm_users')
+      .select('id, full_name')
+      .eq('email', session.email)
+      .limit(1);
+
+    if (users?.[0]) {
+      userId = users[0].id;
+      userName = users[0].full_name || session.email;
+    } else {
+      const { data: newUser } = await supabase
+        .from('rlm_users')
+        .insert({ email: session.email, created_at: new Date().toISOString() })
+        .select('id')
+        .single();
+      if (newUser) userId = newUser.id;
     }
 
+    // Get memory
+    let memoryId = null;
+    let storedHistory = [];
+
+    if (userId) {
+      const { data: memory } = await supabase
+        .from('rlm_coach_memory')
+        .select('id, conversation_history')
+        .eq('user_id', userId)
+        .limit(1);
+
+      if (memory?.[0]) {
+        memoryId = memory[0].id;
+        storedHistory = memory[0].conversation_history || [];
+      }
+    }
+
+    // Build messages for Anthropic
     const recentHistory = storedHistory.slice(-HISTORY_LIMIT);
     const anthropicMessages = [...recentHistory, latestMessage];
 
+    // Call Anthropic
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -132,6 +114,7 @@ export default async function handler(req, res) {
     });
     const data = await anthropicRes.json();
 
+    // Save to Supabase
     if (userId && data.content) {
       const assistantText = data.content
         .filter(b => b.type === 'text')
@@ -142,7 +125,26 @@ export default async function handler(req, res) {
         simplifyForStorage(latestMessage),
         { role: 'assistant', content: assistantText }
       ].slice(-100);
-      await saveMemory(userId, userName, updatedHistory, memoryRecord?.id);
+
+      if (memoryId) {
+        await supabase
+          .from('rlm_coach_memory')
+          .update({
+            conversation_history: updatedHistory,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', memoryId);
+      } else {
+        await supabase
+          .from('rlm_coach_memory')
+          .insert({
+            user_id: userId,
+            user_name: userName,
+            username: userName,
+            conversation_history: updatedHistory,
+            updated_at: new Date().toISOString()
+          });
+      }
     }
 
     return res.status(anthropicRes.status).json(data);
