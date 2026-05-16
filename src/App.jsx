@@ -1011,7 +1011,7 @@ export default function App() {
   const [trackerStart, setTrackerStart] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
-  const [authReady, setAuthReady] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     if (window.location.pathname === '/verify') return;
@@ -1021,14 +1021,36 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['tracker', setTracker], ['trackerStart', setTrackerStart]];
-      for (const [k, set] of keys) {
-        try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
+  if (!authReady) return;
+  const load = async () => {
+    try {
+      const res = await fetch('/api/dashboard-data', { credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) {
+          const d = json.data;
+          if (d.bills) setBills(d.bills);
+          if (d.pay) setPay(d.pay);
+          if (d.grocery) setGrocery(d.grocery);
+          if (d.funds) setFunds(d.funds);
+          if (d.goal) setGoal(d.goal);
+          if (d.snow !== undefined) setSnow(d.snow);
+          if (d.aval !== undefined) setAval(d.aval);
+          if (d.tracker) setTracker(d.tracker);
+          if (d.trackerStart) setTrackerStart(d.trackerStart);
+          setDataLoaded(true);
+          return;
+        }
       }
-    };
-    load();
-  }, []);
+    } catch {}
+    const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['tracker', setTracker], ['trackerStart', setTrackerStart]];
+    for (const [k, set] of keys) {
+      try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
+    }
+    setDataLoaded(true);
+  };
+  load();
+}, [authReady]);
 
   const sv = async (k, v) => { try { await window.storage.set(`rlm_${k}`, JSON.stringify(v)); } catch {} };
   useEffect(() => { sv('bills', bills); }, [bills]);
@@ -1040,6 +1062,22 @@ export default function App() {
   useEffect(() => { sv('aval', aval); }, [aval]);
   useEffect(() => { sv('tracker', tracker); }, [tracker]);
   useEffect(() => { sv('trackerStart', trackerStart); }, [trackerStart]);
+
+useEffect(() => {
+  if (!dataLoaded) return;
+  saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart });
+}, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, dataLoaded]);
+  
+  const saveToSupabase = async (data) => {
+  try {
+    await fetch('/api/dashboard-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ data })
+    });
+  } catch {}
+};
 
   if (window.location.pathname === '/verify') return <VerifyPage />;
   if (!authReady) return (
