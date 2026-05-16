@@ -1,19 +1,35 @@
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
-function getSessionToken(req) {
-  const cookieHeader = req.headers.cookie || '';
-  const cookies = Object.fromEntries(
-    cookieHeader.split(';').map(c => {
-      const [k, ...v] = c.trim().split('=');
-      return [k, v.join('=')];
-    })
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY
   );
-  return cookies['rlm_session'] || null;
+}
+
+function verifySession(cookieHeader) {
+  const cookies = {};
+  (cookieHeader || '').split(';').forEach(part => {
+    const idx = part.indexOf('=');
+    if (idx > 0) cookies[part.substring(0, idx).trim()] = part.substring(idx + 1).trim();
+  });
+  const token = cookies.rlm_session;
+  if (!token) return null;
+  try {
+    const dotIdx = token.lastIndexOf('.');
+    const dataB64 = token.substring(0, dotIdx);
+    const sig = token.substring(dotIdx + 1);
+    const sessionData = Buffer.from(dataB64, 'base64').toString();
+    const expectedSig = crypto
+      .createHmac('sha256', process.env.SESSION_SECRET)
+      .update(sessionData)
+      .digest('hex');
+    if (sig !== expectedSig) return null;
+    const session = JSON.parse(sessionData);
+    if (Date.now() > session.expires) return null;
+    return session;
+  } catch { return null; }
 }
 
 export default async function handler(req, res) {
@@ -24,18 +40,50 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const token = getSessionToken(req);
-  if (!token) return res.status(401).json({ error: 'No session' });
+  const session = verifySession(req.headers.cookie);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
 
-  const { data: user, error: userError } = await supabase
+  const userEmail = session.email;
+  const supabase = getSupabase();
+
+  const { data: users } = await supabase
     .from('rlm_users')
     .select('id')
-    .eq('session_token', token)
-    .gt('session_expires_at', new Date().toISOString())
-    .single();
+    .eq('email', userEmail)
+    .limit(1);
 
-  if (userError || !user) return res.status(401).json({ error: 'Invalid session' });
+  if (!users?.[0]) return res.status(401).json({ error: 'User not found' });
 
-  const userId = user.id;
+  const userId = users[0].id;
 
-  if (req.method === '
+  if (req.method === 'GET') {
+    const { data, error } = await supabase
+      .from('rlm_dashboard_data')
+      .select('data')
+      .eq('user_id', userId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      return res.status(500).json({ error: 'Failed to load data' });
+    }
+
+    return res.status(200).json({ data: data?.data || null });
+  }
+
+  if (req.method === 'POST') {
+    const { data: payload } = req.body;
+
+    const { error } = await supabase
+      .from('rlm_dashboard_data')
+      .upsert(
+        { user_id: userId, data: payload, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+
+    if (error) return res.status(500).json({ error: 'Failed to save data' });
+
+    return res.status(200).json({ success: true });
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
+}
