@@ -1111,12 +1111,10 @@ useEffect(() => {
       <div style={{ background: C.green, padding: '12px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%' }} />
-          <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Dashboard</div>
-          {window.innerWidth >= 640 && <div style={{ color: C.sageLight, fontSize: 11, fontStyle: 'italic' }}>Living life. With money. For real.</div>}
+          <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Coach | Journey</div>
+          {window.innerWidth >= 640 && <div style={{ color: C.white, fontSize: 11, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
         </div>
-        <div style={{ color: C.sageLight, fontSize: 11, fontStyle: 'italic' }}>Living life. With money. For real.</div>
-      </div>
-
+        
       <div style={{ background: 'white', borderBottom: `1px solid ${C.creamDark}`, overflowX: 'auto' }}>
         <div style={{ display: 'flex', padding: '0 18px', minWidth: 'max-content' }}>
           {TABS.map(t => (
