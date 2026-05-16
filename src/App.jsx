@@ -993,7 +993,7 @@ setAwaitingName(false);
       <div style={{ padding: '9px 10px', borderTop: `1px solid ${C.creamDark}`, display: 'flex', gap: 7, flexShrink: 0 }}>
         <button onClick={() => fileRef.current?.click()} title="Share a bill or statement" style={{ background: C.cream, border: `1px solid ${C.creamDark}`, borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>📎</button>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display: 'none' }} />
-        <input value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()} placeholder="Ask anything about your money…" style={{ flex: 1, padding: '7px 11px', border: `1px solid ${C.creamDark}`, borderRadius: 20, fontFamily: 'inherit', fontSize: 12, outline: 'none' }} />
+        <input value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()} placeholder="Ask anything about your money…" style={{ flex: 1, padding: '7px 11px', border: `1px solid ${C.creamDark}`, borderRadius: 20, fontFamily: 'inherit', fontSize: 12, outline: 'none', color: '#2C2C2C' }} />
         <button onClick={send} disabled={loading || (!inp.trim() && !imgData)} style={{ background: (inp.trim() || imgData) && !loading ? C.green : C.creamDark, color: (inp.trim() || imgData) && !loading ? 'white' : C.charcoalLight, border: 'none', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}>→</button>
       </div>
     </div>
