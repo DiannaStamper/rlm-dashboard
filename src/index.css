@@ -109,3 +109,11 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid #C9A440;
+  border-color: #2B5E3F;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(201, 164, 64, 0.15);
+}
