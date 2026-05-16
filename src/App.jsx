@@ -1114,7 +1114,7 @@ useEffect(() => {
           <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Coach | Journey</div>
           {window.innerWidth >= 640 && <div style={{ color: C.white, fontSize: 11, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
         </div>
-        
+        </div>
       <div style={{ background: 'white', borderBottom: `1px solid ${C.creamDark}`, overflowX: 'auto' }}>
         <div style={{ display: 'flex', padding: '0 18px', minWidth: 'max-content' }}>
           {TABS.map(t => (
