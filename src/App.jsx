@@ -203,6 +203,7 @@ function getPeriods(freq, startStr, amt) {
 function getBillsForPeriod(bills, start, end) {
   return bills.filter(b => {
     if (b.status === 'Zero Balance' || !b.dateDue || !b.amount) return false;
+    if (b.halfPayment) return true;
     const day = +b.dateDue;
     const sd = start.getDate(), ed = end.getDate();
     const sameM = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
