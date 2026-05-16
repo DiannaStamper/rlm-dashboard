@@ -921,7 +921,7 @@ setAwaitingName(false);
     const debts = active.filter(b => ['Credit', 'Debt/Loan'].includes(b.category));
     const tD = debts.reduce((s, b) => s + (+b.balance || 0), 0);
     const hiUtil = debts.filter(b => b.creditLimit && (+b.balance / +b.creditLimit) > .3).map(b => b.company);
-    return `Current tab: ${activeTab}. Bills entered: ${active.length}. Monthly obligations: ${fmt(tM)}. Total debt balance: ${fmt(tD)}. Paycheck: ${fmt(paySettings.amount)} ${paySettings.frequency || ''}. ${hiUtil.length ? `Cards above 30% utilization: ${hiUtil.join(', ')}.` : ''}`;
+    return `⚠️ LIVE DATA — always use these numbers, ignore any older numbers from memory. Current tab:: ${activeTab}. Bills entered: ${active.length}. Monthly obligations: ${fmt(tM)}. Total debt balance: ${fmt(tD)}. Paycheck: ${fmt(paySettings.amount)} ${paySettings.frequency || ''}. ${hiUtil.length ? `Cards above 30% utilization: ${hiUtil.join(', ')}.` : ''}`;
   };
 
   const send = async () => {
