@@ -5,7 +5,6 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const HISTORY_LIMIT = 40;
 
 const sbHeaders = {
-  'apikey': SUPABASE_KEY,
   'Authorization': `Bearer ${SUPABASE_KEY}`,
   'Content-Type': 'application/json',
 };
