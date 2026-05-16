@@ -103,16 +103,17 @@ export default async function handler(req, res) {
         { role: 'assistant', content: assistantText }
       ].slice(-100);
 
-      if (memoryId) {
-        await supabase
+    if (memoryId) {
+        const { error: updateErr } = await supabase
           .from('rlm_coach_memory')
           .update({
             conversation_history: updatedHistory,
             updated_at: new Date().toISOString()
           })
           .eq('id', memoryId);
+        if (updateErr) console.error('Memory update error:', JSON.stringify(updateErr));
       } else {
-        await supabase
+        const { error: insertErr } = await supabase
           .from('rlm_coach_memory')
           .insert({
             user_id: crypto.randomUUID(),
@@ -121,6 +122,7 @@ export default async function handler(req, res) {
             conversation_history: updatedHistory,
             updated_at: new Date().toISOString()
           });
+        if (insertErr) console.error('Memory insert error:', JSON.stringify(insertErr));
       }
     }
 
