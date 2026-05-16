@@ -360,7 +360,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
   let cum = 0;
   const pData = periods.map((p, i) => {
     const pb = getBillsForPeriod(bills, p.start, p.end);
-    const bt = pb.reduce((s, b) => s + (+b.amount || 0), 0);
+    const bt = pb.reduce((s, b) => s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0)), 0);
     const gr = +(groceryBudgets[i] || 0);
     cum += p.amt - bt - gr;
     return { ...p, bills: pb, bt, gr, cum: +cum.toFixed(2) };
@@ -387,7 +387,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
           {p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0', borderTop: `1px solid ${C.creamDark}` }}>No bills due this period 🎉</div> : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}>
               <thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
-              <tbody>{p.bills.map(b => <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}` }}><td style={{ padding: '6px 7px', color: C.charcoalLight }}>{b.dateDue}{getSuffix(+b.dateDue)}</td><td style={{ padding: '6px 7px', fontWeight: 600 }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: '#c0392b' }}>{fmt(b.amount)}</td></tr>)}</tbody>
+              <tbody>{p.bills.map(b => <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}` }}><td style={{ padding: '6px 7px', color: C.charcoalLight }}>{b.dateDue}{getSuffix(+b.dateDue)}</td><td style={{ padding: '6px 7px', fontWeight: 600 }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: '#c0392b' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td></tr>)}</tbody>
             </table>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
