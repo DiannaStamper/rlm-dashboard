@@ -884,15 +884,15 @@ const [storageLoaded, setStorageLoaded] = useState(false);
   useEffect(() => {
     if (!isOpen || !storageLoaded) return;
     if (!userName) {
-      setMsgs([{ role: 'assistant', content: "Hi! I'm your RLM Coach. Before we get started — what would you like me to call you?" }]);
-      setAwaitingName(true);
+     setMsgs([{ role: 'assistant', content: "Hi! I'm your RLM Coach — I'm here and ready whenever you are. What's on your mind today?" }]);
+setAwaitingName(false);
     } else {
       const greeting = TAB_GREETINGS[activeTab]?.(userName) || `Hi ${userName} — I'm here. What's on your mind?`;
       setMsgs([{ role: 'assistant', content: greeting }]);
       setAwaitingName(false);
     }
-  }, [isOpen, activeTab]);
-
+  }, [isOpen, activeTab, storageLoaded]);
+  
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, loading]);
 
   const handleImage = (e) => {
