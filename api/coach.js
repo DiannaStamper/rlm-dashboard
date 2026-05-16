@@ -56,46 +56,23 @@ export default async function handler(req, res) {
 
     const { model, max_tokens, system, messages } = req.body;
     const latestMessage = messages[messages.length - 1];
+    const userEmail = session.email;
 
     const supabase = getSupabase();
 
-    // Find or create user
-    let userId = null;
-    let userName = session.email;
-
-    const { data: users } = await supabase
-      .from('rlm_users')
-      .select('id, full_name')
-      .eq('email', session.email)
-      .limit(1);
-
-    if (users?.[0]) {
-      userId = users[0].id;
-      userName = users[0].full_name || session.email;
-    } else {
-      const { data: newUser } = await supabase
-        .from('rlm_users')
-        .insert({ email: session.email, created_at: new Date().toISOString() })
-        .select('id')
-        .single();
-      if (newUser) userId = newUser.id;
-    }
-
-    // Get memory
+    // Look up memory directly by email — no rlm_users dependency
     let memoryId = null;
     let storedHistory = [];
 
-    if (userId) {
-      const { data: memory } = await supabase
-        .from('rlm_coach_memory')
-        .select('id, conversation_history')
-        .eq('user_id', userId)
-        .limit(1);
+    const { data: memory } = await supabase
+      .from('rlm_coach_memory')
+      .select('id, conversation_history')
+      .eq('username', userEmail)
+      .limit(1);
 
-      if (memory?.[0]) {
-        memoryId = memory[0].id;
-        storedHistory = memory[0].conversation_history || [];
-      }
+    if (memory?.[0]) {
+      memoryId = memory[0].id;
+      storedHistory = memory[0].conversation_history || [];
     }
 
     // Build messages for Anthropic
@@ -115,7 +92,7 @@ export default async function handler(req, res) {
     const data = await anthropicRes.json();
 
     // Save to Supabase
-    if (userId && data.content) {
+    if (data.content) {
       const assistantText = data.content
         .filter(b => b.type === 'text')
         .map(b => b.text)
@@ -138,9 +115,9 @@ export default async function handler(req, res) {
         await supabase
           .from('rlm_coach_memory')
           .insert({
-            user_id: userId,
-            user_name: userName,
-            username: userName,
+            user_id: crypto.randomUUID(),
+            user_name: userEmail,
+            username: userEmail,
             conversation_history: updatedHistory,
             updated_at: new Date().toISOString()
           });
