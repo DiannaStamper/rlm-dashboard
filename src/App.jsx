@@ -356,15 +356,16 @@ function EverythingPage({ bills, setBills }) {
 // =====================================================================
 // PAYDAY PAGE
 // =====================================================================
-function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets }) {
+function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides }) {
   const periods = getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount);
   let cum = 0;
   const pData = periods.map((p, i) => {
-    const pb = getBillsForPeriod(bills, p.start, p.end);
-    const bt = pb.reduce((s, b) => s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0)), 0);
-    const gr = +(groceryBudgets[i] || 0);
-    cum += p.amt - bt - gr;
-    return { ...p, bills: pb, bt, gr, cum: +cum.toFixed(2) };
+  const pb = getBillsForPeriod(bills, p.start, p.end);
+  const bt = pb.reduce((s, b) => s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0)), 0);
+  const gr = +(groceryBudgets[i] || 0);
+  const amt = +(paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : p.amt);
+  cum += amt - bt - gr;
+  return { ...p, amt, bills: pb, bt, gr, cum: +cum.toFixed(2) };
   });
   return (
     <div>
@@ -383,7 +384,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
         <Card key={i}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div><div style={{ fontWeight: 700, fontSize: 14, color: C.charcoal }}>Pay Period {i + 1}</div><div style={{ fontSize: 11, color: C.charcoalLight }}>{fmtD(p.start)} — {fmtD(p.end)}</div></div>
-            <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 700, fontSize: 18, color: C.green }}>{fmt(p.amt)}</div><div style={{ fontSize: 10, color: C.charcoalLight }}>paycheck</div></div>
+            <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 700, fontSize: 18, color: C.green }}><input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(o => ({...o, [i]: e.target.value}))} style={{ fontWeight: 700, fontSize: 18, color: C.green, background: 'transparent', border: 'none', textAlign: 'right', width: 130, padding: 0 }} /></div><div style={{ fontSize: 10, color: C.charcoalLight }}>paycheck</div>
           </div>
           {p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0', borderTop: `1px solid ${C.creamDark}` }}>No bills due this period 🎉</div> : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}>
@@ -1015,6 +1016,7 @@ export default function App() {
   const [aval, setAval] = useState('');
   const [tracker, setTracker] = useState([]);
   const [trackerStart, setTrackerStart] = useState('');
+  const [paycheckOverrides, setPaycheckOverrides] = useState({});  
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
   const [authReady, setAuthReady] = useState(false);
@@ -1045,6 +1047,7 @@ export default function App() {
           if (d.aval !== undefined) setAval(d.aval);
           if (d.tracker) setTracker(d.tracker);
           if (d.trackerStart) setTrackerStart(d.trackerStart);
+          if (d.paycheckOverrides) setPaycheckOverrides(d.paycheckOverrides);
           setDataLoaded(true);
           return;
         }
@@ -1072,8 +1075,8 @@ export default function App() {
 
 useEffect(() => {
   if (!dataLoaded) return;
-  saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart });
-}, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, dataLoaded]);
+  saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides });
+}, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, dataLoaded]);
   
   const saveToSupabase = async (data) => {
   try {
@@ -1127,7 +1130,7 @@ useEffect(() => {
 
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
-        {tab === 'payday'     && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} />}
+        <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} />
         {tab === 'debt'       && <DebtPage bills={bills} />}
         {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
