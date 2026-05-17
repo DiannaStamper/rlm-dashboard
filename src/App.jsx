@@ -1126,7 +1126,7 @@ useEffect(() => {
 
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
-        <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} />
+        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} />}
         {tab === 'debt'       && <DebtPage bills={bills} />}
         {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
