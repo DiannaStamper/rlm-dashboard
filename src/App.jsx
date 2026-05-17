@@ -391,7 +391,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
             <div>
               <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Grocery Budget</label>
-              <input type="number" value={p.gr || ''} type="number" value={p.gr || ''} placeholder="$0.00" type="text" value={p.gr !== undefined && p.gr !== '' ? '$' + parseFloat(p.gr || 0).toFixed(2) : ''} onChange={e => { const raw = e.target.value.replace(/[^\d.]/g, ''); setGroceryBudgets(g => ({ ...g, [i]: raw })); }} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} style={{ width: '100%', padding: '6px 9px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }} />
+              <input type="text" value={p.gr !== undefined && p.gr !== '' ? '$' + parseFloat(p.gr || 0).toFixed(2) : ''} onChange={e => { const raw = e.target.value.replace(/[^\d.]/g, ''); setGroceryBudgets(g => ({ ...g, [i]: raw })); }} style={{ width: '100%', padding: '6px 9px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
               {[['Bills', fmt(p.bt), '#c0392b'], ['Left After Bills', fmt(p.amt - p.bt), C.charcoal], ['Running Total', fmt(p.cum), p.cum >= 0 ? C.green : '#c0392b']].map(([l, v, col]) => (
