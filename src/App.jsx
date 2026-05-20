@@ -200,6 +200,15 @@ function getPeriods(freq, startStr, amt) {
   return periods;
 }
 
+function getActualDueDate(dayNum, start, end) {
+  const day = +dayNum;
+  const sameM = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  if (sameM) return new Date(start.getFullYear(), start.getMonth(), day);
+  return day >= start.getDate()
+    ? new Date(start.getFullYear(), start.getMonth(), day)
+    : new Date(end.getFullYear(), end.getMonth(), day);
+}
+
 function getBillsForPeriod(bills, start, end) {
   return bills.filter(b => {
     if (b.status === 'Zero Balance' || !b.dateDue || !b.amount) return false;
@@ -385,7 +394,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div><div style={{ fontWeight: 700, fontSize: 14, color: C.charcoal }}>Pay Period {i + 1}</div><div style={{ fontSize: 11, color: C.charcoalLight }}>{fmtD(p.start)} — {fmtD(p.end)}</div></div>
             <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 700, fontSize: 18, color: C.green }}><input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} style={{ fontWeight: 700, fontSize: 18, color: C.green, background: 'transparent', border: 'none', textAlign: 'right', width: 130, padding: 0 }} /><span style={{ fontSize: 10, color: C.charcoalLight, marginLeft: 4, cursor: 'default' }}>✏️</span></div><div style={{ fontSize: 10, color: C.charcoalLight }}>paycheck</div></div></div>{p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0' }}>No bills due this period 🎉</div> : (<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}><thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
-              <tbody>{p.bills.map(b => <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}` }}><td style={{ padding: '6px 7px', color: C.charcoalLight }}>{b.dateDue}{getSuffix(+b.dateDue)}</td><td style={{ padding: '6px 7px', fontWeight: 600 }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: '#c0392b' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td></tr>)}</tbody>
+              <tbody>{[...p.bills].sort((a,b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end)).map(b => <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}` }}><td style={{ padding: '6px 7px', color: C.charcoalLight }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td><td style={{ padding: '6px 7px', fontWeight: 600 }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: '#c0392b' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td></tr>)}</tbody>
             </table>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
