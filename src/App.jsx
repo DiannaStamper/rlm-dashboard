@@ -365,9 +365,9 @@ function EverythingPage({ bills, setBills }) {
 // =====================================================================
 // PAYDAY PAGE
 // =====================================================================
-function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides }) {
+function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides, paidBills, setPaidBills, bankBalance, setBankBalance }) {
   const periods = getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount);
-  let cum = 0;
+  let cum = +(bankBalance || 0);
   const pData = periods.map((p, i) => {
   const pb = getBillsForPeriod(bills, p.start, p.end);
   const bt = pb.reduce((s, b) => s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0)), 0);
@@ -382,10 +382,11 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
       <p style={{ margin: '0 0 14px', color: C.charcoalLight, fontSize: 12 }}>Your next six paychecks, laid out before they arrive. Where income meets obligations.</p>
       <Card>
         <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.green, marginBottom: 10, fontSize: 14 }}>⚙️ Setup</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
           <FI label="How often am I paid?" value={paySettings.frequency} onChange={e => setPaySettings(p => ({ ...p, frequency: e.target.value }))} options={FREQS} />
           <FI label="Next paycheck date" value={paySettings.nextDate} onChange={e => setPaySettings(p => ({ ...p, nextDate: e.target.value }))} type="date" />
           <FI label="Paycheck amount ($)" value={paySettings.amount} onChange={e => setPaySettings(p => ({ ...p, amount: e.target.value }))} type="number" placeholder="0.00" />
+          <FI label="Current bank balance ($)" value={bankBalance} onChange={e => setBankBalance(e.target.value)} type="number" placeholder="0.00" />
         </div>
       </Card>
       {periods.length === 0 && <Card style={{ textAlign: 'center', padding: 36, color: C.charcoalLight, fontSize: 13 }}>Enter your pay setup above to see your next six paychecks.</Card>}
@@ -393,8 +394,8 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
         <Card key={i}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div><div style={{ fontWeight: 700, fontSize: 14, color: C.charcoal }}>Pay Period {i + 1}</div><div style={{ fontSize: 11, color: C.charcoalLight }}>{fmtD(p.start)} — {fmtD(p.end)}</div></div>
-            <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 700, fontSize: 18, color: C.green }}><input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} style={{ fontWeight: 700, fontSize: 18, color: C.green, background: 'transparent', border: 'none', textAlign: 'right', width: 130, padding: 0 }} /><span style={{ fontSize: 10, color: C.charcoalLight, marginLeft: 4, cursor: 'default' }}>✏️</span></div><div style={{ fontSize: 10, color: C.charcoalLight }}>paycheck</div></div></div>{p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0' }}>No bills due this period 🎉</div> : (<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}><thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
-              <tbody>{[...p.bills].sort((a,b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end)).map(b => <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}` }}><td style={{ padding: '6px 7px', color: C.charcoalLight }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td><td style={{ padding: '6px 7px', fontWeight: 600 }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: '#c0392b' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td></tr>)}</tbody>
+            <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 700, fontSize: 18, color: C.green }}><input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} style={{ fontWeight: 700, fontSize: 18, color: C.green, background: 'transparent', border: 'none', textAlign: 'right', width: 130, padding: 0 }} /><span style={{ fontSize: 10, color: C.charcoalLight, marginLeft: 4, cursor: 'default' }}>✏️</span></div><div style={{ fontSize: 10, color: C.charcoalLight }}>paycheck</div></div></div>{p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0' }}>No bills due this period 🎉</div> : (<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}><thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount', '✓'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
+             <tbody>{[...p.bills].sort((a,b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end)).map(b => { const pk = `${b.id}_${p.start.toISOString().slice(0,10)}`; const isPaid = !!paidBills[pk]; return <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: isPaid ? 0.55 : 1, background: isPaid ? '#f0faf4' : 'transparent' }}><td style={{ padding: '6px 7px', color: C.charcoalLight, textDecoration: isPaid ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td><td style={{ padding: '6px 7px', fontWeight: 600, textDecoration: isPaid ? 'line-through' : 'none' }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: isPaid ? C.green : '#c0392b', textDecoration: isPaid ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td><td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} onChange={() => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; })} style={{ accentColor: C.green, width: 16, height: 16, cursor: 'pointer' }} /></td></tr>; })}</tbody>
             </table>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
@@ -1022,6 +1023,8 @@ export default function App() {
   const [tracker, setTracker] = useState([]);
   const [trackerStart, setTrackerStart] = useState('');
   const [paycheckOverrides, setPaycheckOverrides] = useState({});  
+  const [paidBills, setPaidBills] = useState({});
+const [bankBalance, setBankBalance] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
   const [authReady, setAuthReady] = useState(false);
@@ -1053,6 +1056,8 @@ export default function App() {
           if (d.tracker) setTracker(d.tracker);
           if (d.trackerStart) setTrackerStart(d.trackerStart);
           if (d.paycheckOverrides) setPaycheckOverrides(d.paycheckOverrides);
+          if (d.paidBills) setPaidBills(d.paidBills);
+if (d.bankBalance !== undefined) setBankBalance(d.bankBalance);
           setDataLoaded(true);
           return;
         }
@@ -1077,11 +1082,13 @@ export default function App() {
   useEffect(() => { sv('aval', aval); }, [aval]);
   useEffect(() => { sv('tracker', tracker); }, [tracker]);
   useEffect(() => { sv('trackerStart', trackerStart); }, [trackerStart]);
+  useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
+useEffect(() => { sv('bankBalance', bankBalance); }, [bankBalance]);
 
 useEffect(() => {
   if (!dataLoaded) return;
-  saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides });
-}, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, dataLoaded]);
+  saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, bankBalance });
+}, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, bankBalance, dataLoaded]);
   
   const saveToSupabase = async (data) => {
   try {
@@ -1135,7 +1142,7 @@ useEffect(() => {
 
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
-        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} />}
+        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} bankBalance={bankBalance} setBankBalance={setBankBalance} />}
         {tab === 'debt'       && <DebtPage bills={bills} />}
         {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
