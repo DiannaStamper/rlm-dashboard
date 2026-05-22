@@ -1111,6 +1111,10 @@ useEffect(() => {
       </div>
     </div>
   );
+const handleLogout = async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+    window.location.href = 'https://myreallifemoney.memberful.com/auth/sign_out?return_to=https://dashboard.myreallifemoney.com';
+  };
 
   const TABS = [
     { id: 'everything', label: 'Everything Page' },
@@ -1129,8 +1133,9 @@ useEffect(() => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%' }} />
           <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Coach | Journey</div>
-          {window.innerWidth >= 640 && <div style={{ color: 'white', fontSize: 13, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
+     {window.innerWidth >= 640 && <div style={{ color: 'white', fontSize: 13, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
         </div>
+        <button onClick={handleLogout} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.4)', color: 'white', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>Sign Out</button>
         </div>
       <div style={{ background: 'white', borderBottom: `1px solid ${C.creamDark}`, overflowX: 'auto' }}>
         <div style={{ display: 'flex', padding: '0 18px', minWidth: 'max-content' }}>
