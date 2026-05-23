@@ -452,7 +452,8 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
             if (p.bills.length === 0) return null;
             return (
               <div style={{ marginTop: 10, padding: '10px 12px', background: '#EEF3F8', borderRadius: 8, borderLeft: `3px solid ${C.slate}` }}>
-                <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 7 }}>🏦 Cleared vs. Pending</div>
+                <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 7 }}>🏦 {(() => {
+            const periodKey = p.start.toISOString().slice(0,10);</div>
                 <div style={{ display: 'grid', gridTemplateColumns: showBank ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 6 }}>
                   {[
                     ['Cleared', fmt(clearedAmt), C.green],
