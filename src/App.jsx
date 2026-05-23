@@ -925,4 +925,4 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
       setMsgs([{ role: 'assistant', content: "Hi! I'm your RLM Coach — I'm here and ready whenever you are. What's on your mind today?" }]);
       setAwaitingName(false);
     } else {
-      const greeting =
+      const greeting = TAB_GREETINGS[activeTab]?.(userName) || `Hi ${userName} — I'm here. What's on your mind?`;
