@@ -372,7 +372,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
   const pb = getBillsForPeriod(bills, p.start, p.end);
   const bt = pb.reduce((s, b) => s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0)), 0);
   const gr = +(groceryBudgets[i] || 0);
-  const amt = +(paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : p.amt);
+  const amt = i === 0 ? +paySettings.amount : +(paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : p.amt);
   cum += amt - bt - gr;
   return { ...p, amt, bills: pb, bt, gr, cum: +cum.toFixed(2) };
   });
@@ -398,18 +398,22 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
              <tbody>{[...p.bills].sort((a,b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end)).map(b => { const pk = `${b.id}_${p.start.toISOString().slice(0,10)}`; const isPaid = !!paidBills[pk]; return <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: isPaid ? 0.55 : 1, background: isPaid ? '#f0faf4' : 'transparent' }}><td style={{ padding: '6px 7px', color: C.charcoalLight, textDecoration: isPaid ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td><td style={{ padding: '6px 7px', fontWeight: 600, textDecoration: isPaid ? 'line-through' : 'none' }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: isPaid ? C.green : '#c0392b', textDecoration: isPaid ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td><td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} onChange={() => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; })} style={{ accentColor: C.green, width: 16, height: 16, cursor: 'pointer' }} /></td></tr>; })}</tbody>
             </table>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Grocery Budget ($)</label>
-              <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: '100%', padding: '6px 9px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
+            <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Bills Due</div>
+              <div style={{ fontWeight: 700, color: '#c0392b', fontSize: 14 }}>{fmt(p.bt)}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
-              {[['Bills', fmt(p.bt), '#c0392b'], ['Left After Bills', fmt(p.amt - p.bt), C.charcoal], ['Running Total', fmt(p.cum), p.cum >= 0 ? C.green : '#c0392b']].map(([l, v, col]) => (
-                <div key={l} style={{ background: l === 'Running Total' ? (p.cum >= 0 ? '#d4edda' : '#f8d7da') : C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase' }}>{l}</div>
-                  <div style={{ fontWeight: 700, color: col, fontSize: 14 }}>{v}</div>
-                </div>
-              ))}
+            <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Grocery Budget</div>
+              <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={e => e.key === 'Enter' && e.target.blur()} placeholder="$0.00" style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
+            </div>
+            <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Left After Bills</div>
+              <div style={{ fontWeight: 700, color: C.charcoal, fontSize: 14 }}>{fmt(p.amt - p.bt)}</div>
+            </div>
+            <div style={{ background: p.cum >= 0 ? '#d4edda' : '#f8d7da', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: p.cum >= 0 ? '#155724' : '#842029', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Running Total</div>
+              <div style={{ fontWeight: 700, color: p.cum >= 0 ? C.green : '#c0392b', fontSize: 14 }}>{fmt(p.cum)}</div>
             </div>
           </div>
           {(() => {
