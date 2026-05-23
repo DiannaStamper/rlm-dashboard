@@ -429,38 +429,9 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
                   {[
                     ['Cleared', fmt(clearedAmt), C.green],
                     ['Still to Clear', fmt(unclearedAmt), unclearedAmt > 0 ? '#c0392b' : C.green],
-                    ...(showBank ? [['Bank After All Clear', fmt(bankAfterAll), bankAfterAll >= 0 ? C.green : '#c0392b']] : [])
+                    ...(showBank ? [['Available Before Next Payday', fmt(bankAfterAll), bankAfterAll >= 0 ? C.green : '#c0392b']] : [])
                   ].map(([l, v, col]) => (
-                    <div key={l} style={{ background: l === 'Bank After All Clear' ? (bankAfterAll >= 0 ? '#d4edda' : '#f8d7da') : 'white', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase' }}>{l}</div>
-                      <div style={{ fontWeight: 700, color: col, fontSize: 14 }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-          {(() => {
-            const periodKey = p.start.toISOString().slice(0,10);
-            const clearedAmt = p.bills.reduce((s, b) => {
-              const pk = `${b.id}_${periodKey}`;
-              return paidBills[pk] ? s + (b.halfPayment ? (+b.amount||0)/2 : (+b.amount||0)) : s;
-            }, 0);
-            const unclearedAmt = p.bt - clearedAmt;
-            const showBank = i === 0 && +bankBalance > 0;
-            const bankAfterAll = +(bankBalance||0) - unclearedAmt;
-            if (p.bills.length === 0) return null;
-            return (
-              <div style={{ marginTop: 10, padding: '10px 12px', background: '#EEF3F8', borderRadius: 8, borderLeft: `3px solid ${C.slate}` }}>
-                <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 7 }}>🏦 {(() => {
-            const periodKey = p.start.toISOString().slice(0,10);</div>
-                <div style={{ display: 'grid', gridTemplateColumns: showBank ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 6 }}>
-                  {[
-                    ['Cleared', fmt(clearedAmt), C.green],
-                    ['Still to Clear', fmt(unclearedAmt), unclearedAmt > 0 ? '#c0392b' : C.green],
-                    ...(showBank ? [['Bank After All Clear', fmt(bankAfterAll), bankAfterAll >= 0 ? C.green : '#c0392b']] : [])
-                  ].map(([l, v, col]) => (
-                    <div key={l} style={{ background: l === 'Bank After All Clear' ? (bankAfterAll >= 0 ? '#d4edda' : '#f8d7da') : 'white', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+                    <div key={l} style={{ background: l === 'Available Before Next Payday' ? (bankAfterAll >= 0 ? '#d4edda' : '#f8d7da') : 'white', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
                       <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase' }}>{l}</div>
                       <div style={{ fontWeight: 700, color: col, fontSize: 14 }}>{v}</div>
                     </div>
@@ -707,7 +678,6 @@ function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Days run FORWARD from startDate (Day 1 = start, Day 7 = start + 6)
   const days = startDate ? Array.from({ length: 7 }, (_, i) => {
     const d = new Date(startDate + 'T00:00:00');
     d.setDate(d.getDate() + i);
@@ -754,7 +724,6 @@ function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
     setGuess('');
   };
 
-  // ── PRE-START SCREEN ──
   if (!startDate) {
     return (
       <div>
@@ -788,7 +757,6 @@ function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
     );
   }
 
-  // ── ACTIVE TRACKER ──
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -932,8 +900,8 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
   const [inp, setInp] = useState('');
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
-const [awaitingName, setAwaitingName] = useState(false);
-const [storageLoaded, setStorageLoaded] = useState(false);
+  const [awaitingName, setAwaitingName] = useState(false);
+  const [storageLoaded, setStorageLoaded] = useState(false);
   const [imgData, setImgData] = useState(null);
   const [imgType, setImgType] = useState(null);
   const [imgPreview, setImgPreview] = useState(null);
@@ -954,270 +922,7 @@ const [storageLoaded, setStorageLoaded] = useState(false);
   useEffect(() => {
     if (!isOpen || !storageLoaded) return;
     if (!userName) {
-     setMsgs([{ role: 'assistant', content: "Hi! I'm your RLM Coach — I'm here and ready whenever you are. What's on your mind today?" }]);
-setAwaitingName(false);
+      setMsgs([{ role: 'assistant', content: "Hi! I'm your RLM Coach — I'm here and ready whenever you are. What's on your mind today?" }]);
+      setAwaitingName(false);
     } else {
-      const greeting = TAB_GREETINGS[activeTab]?.(userName) || `Hi ${userName} — I'm here. What's on your mind?`;
-      setMsgs([{ role: 'assistant', content: greeting }]);
-      setAwaitingName(false);
-    }
-  }, [isOpen, activeTab, storageLoaded]);
-  
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, loading]);
-
-  const handleImage = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const dataUrl = ev.target.result;
-      setImgData(dataUrl.split(',')[1]);
-      setImgType(file.type || 'image/jpeg');
-      setImgPreview(dataUrl);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const clearImage = () => { setImgData(null); setImgType(null); setImgPreview(null); };
-
-  const buildCtx = () => {
-    const active = bills.filter(b => b.status !== 'Zero Balance');
-    const tM = active.reduce((s, b) => s + (+b.amount || 0), 0);
-    const debts = active.filter(b => ['Credit', 'Debt/Loan'].includes(b.category));
-    const tD = debts.reduce((s, b) => s + (+b.balance || 0), 0);
-    const hiUtil = debts.filter(b => b.creditLimit && (+b.balance / +b.creditLimit) > .3).map(b => b.company);
-    return `⚠️ LIVE DATA — always use these numbers, ignore any older numbers from memory. Current tab:: ${activeTab}. Bills entered: ${active.length}. Monthly obligations: ${fmt(tM)}. Total debt balance: ${fmt(tD)}. Paycheck: ${fmt(paySettings.amount)} ${paySettings.frequency || ''}. ${hiUtil.length ? `Cards above 30% utilization: ${hiUtil.join(', ')}.` : ''}`;
-  };
-
-  const send = async () => {
-    if ((!inp.trim() && !imgData) || loading) return;
-    if (awaitingName) {
-      const name = inp.trim() || 'friend';
-      setUserName(name);
-      try { await window.storage.set('rlm_username', name); } catch {}
-      setAwaitingName(false);
-      const greeting = TAB_GREETINGS[activeTab]?.(name) || `Nice to meet you, ${name}. I'm here whenever you're ready.`;
-      setMsgs(m => [...m, { role: 'user', content: name }, { role: 'assistant', content: greeting }]);
-      setInp('');
-      return;
-    }
-    const userContent = imgData
-      ? [{ type: 'image', source: { type: 'base64', media_type: imgType, data: imgData } }, ...(inp.trim() ? [{ type: 'text', text: inp.trim() }] : [{ type: 'text', text: 'What is this?' }])]
-      : inp.trim();
-    const displayMsg = { role: 'user', content: inp.trim() || '📷 Image shared', imgPreview };
-    const apiMsg = { role: 'user', content: userContent };
-    const allDisplay = [...msgs, displayMsg];
-    const allApi = msgs.filter(m => !m.imgPreview).map(m => ({ role: m.role, content: m.content })).concat(apiMsg);
-    setMsgs(allDisplay);
-    setInp('');
-    clearImage();
-    setLoading(true);
-    try {
-      const res = await fetch('/api/coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1024, system: `${JOURNEY_SYSTEM_PROMPT}\n\nUser context right now: ${buildCtx()}`, messages: allApi.slice(1) })
-      });
-      const data = await res.json();
-      const reply = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || 'Try again?';
-      setMsgs(m => [...m, { role: 'assistant', content: reply }]);
-    } catch {
-      setMsgs(m => [...m, { role: 'assistant', content: 'Something went wrong. Check your connection and try again.' }]);
-    }
-    setLoading(false);
-  };
-
-  if (!isOpen) return null;
-  return (
-    <div style={{ position: 'fixed', right: 18, bottom: 72, width: 370, height: 520, background: 'white', borderRadius: 16, boxShadow: '0 10px 40px rgba(0,0,0,.2)', display: 'flex', flexDirection: 'column', zIndex: 1000, overflow: 'hidden', border: `2px solid ${C.green}` }}>
-      <div style={{ background: C.green, padding: '11px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-        <div>
-          <div style={{ color: 'white', fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 14 }}>RLM Coach | Journey</div>
-          <div style={{ color: C.sageLight, fontSize: 10 }}>Real Life Money · No judgment. Just answers.</div>
-        </div>
-        <button onClick={onClose} style={{ color: 'white', background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 9 }}>
-        {msgs.map((m, i) => (
-          <div key={i} style={{ maxWidth: '88%', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? C.green : C.cream, color: m.role === 'user' ? 'white' : C.charcoal, padding: '8px 12px', borderRadius: m.role === 'user' ? '13px 13px 3px 13px' : '13px 13px 13px 3px', fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-            {m.imgPreview && <img src={m.imgPreview} alt="Shared" style={{ maxWidth: '100%', borderRadius: 6, marginBottom: m.content && m.content !== '📷 Image shared' ? 6 : 0 }} />}
-            {m.content && m.content !== '📷 Image shared' && m.content}
-            {m.content === '📷 Image shared' && !m.imgPreview && '📷 Image shared'}
-          </div>
-        ))}
-        {loading && <div style={{ alignSelf: 'flex-start', background: C.cream, padding: '8px 12px', borderRadius: '13px 13px 13px 3px', fontSize: 12, color: C.charcoalLight }}>Thinking…</div>}
-        <div ref={endRef} />
-      </div>
-      {imgPreview && (
-        <div style={{ padding: '8px 12px', background: C.creamDark, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <img src={imgPreview} alt="Preview" style={{ height: 40, width: 40, objectFit: 'cover', borderRadius: 4 }} />
-          <span style={{ fontSize: 11, color: C.charcoalLight, flex: 1 }}>Image ready to send</span>
-          <button onClick={clearImage} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 16 }}>✕</button>
-        </div>
-      )}
-      <div style={{ padding: '9px 10px', borderTop: `1px solid ${C.creamDark}`, display: 'flex', gap: 7, flexShrink: 0 }}>
-        <button onClick={() => fileRef.current?.click()} title="Share a bill or statement" style={{ background: C.cream, border: `1px solid ${C.creamDark}`, borderRadius: 8, width: 34, height: 34, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>📎</button>
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display: 'none' }} />
-        <input value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()} placeholder="Ask anything about your money…" style={{ flex: 1, padding: '7px 11px', border: `1px solid ${C.creamDark}`, borderRadius: 20, fontFamily: 'inherit', fontSize: 12, outline: 'none', color: '#2C2C2C' }} />
-        <button onClick={send} disabled={loading || (!inp.trim() && !imgData)} style={{ background: (inp.trim() || imgData) && !loading ? C.green : C.creamDark, color: (inp.trim() || imgData) && !loading ? 'white' : C.charcoalLight, border: 'none', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}>→</button>
-      </div>
-    </div>
-  );
-}
-
-// =====================================================================
-// MAIN APP
-// =====================================================================
-export default function App() {
-  const [bills, setBills] = useState([]);
-  const [pay, setPay] = useState({ frequency: 'Biweekly', nextDate: '', amount: '' });
-  const [grocery, setGrocery] = useState({});
-  const [funds, setFunds] = useState([]);
-  const [goal, setGoal] = useState({ type: 'Pay off a specific debt', which: '', targetDate: '', contribution: '' });
-  const [snow, setSnow] = useState('');
-  const [aval, setAval] = useState('');
-  const [tracker, setTracker] = useState([]);
-  const [trackerStart, setTrackerStart] = useState('');
-  const [paycheckOverrides, setPaycheckOverrides] = useState({});  
-  const [paidBills, setPaidBills] = useState({});
-const [bankBalance, setBankBalance] = useState('');
-  const [tab, setTab] = useState('everything');
-  const [coach, setCoach] = useState(false);
-  const [authReady, setAuthReady] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState(false);
-
-  useEffect(() => {
-    if (window.location.pathname === '/verify') return;
-    fetch('/api/auth/check')
-      .then(r => { if (r.ok) setAuthReady(true); else window.location.href = '/api/auth/login'; })
-      .catch(() => { window.location.href = '/api/auth/login'; });
-  }, []);
-
-  useEffect(() => {
-  if (!authReady) return;
-  const load = async () => {
-    try {
-      const res = await fetch('/api/dashboard-data', { credentials: 'include' });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data) {
-          const d = json.data;
-          if (d.bills) setBills(d.bills);
-          if (d.pay) setPay(d.pay);
-          if (d.grocery) setGrocery(d.grocery);
-          if (d.funds) setFunds(d.funds);
-          if (d.goal) setGoal(d.goal);
-          if (d.snow !== undefined) setSnow(d.snow);
-          if (d.aval !== undefined) setAval(d.aval);
-          if (d.tracker) setTracker(d.tracker);
-          if (d.trackerStart) setTrackerStart(d.trackerStart);
-          if (d.paycheckOverrides) setPaycheckOverrides(d.paycheckOverrides);
-          if (d.paidBills) setPaidBills(d.paidBills);
-if (d.bankBalance !== undefined) setBankBalance(d.bankBalance);
-          setDataLoaded(true);
-          return;
-        }
-      }
-    } catch {}
-    const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['tracker', setTracker], ['trackerStart', setTrackerStart]];
-    for (const [k, set] of keys) {
-      try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
-    }
-    setDataLoaded(true);
-  };
-  load();
-}, [authReady]);
-
-  const sv = async (k, v) => { try { await window.storage.set(`rlm_${k}`, JSON.stringify(v)); } catch {} };
-  useEffect(() => { sv('bills', bills); }, [bills]);
-  useEffect(() => { sv('pay', pay); }, [pay]);
-  useEffect(() => { sv('grocery', grocery); }, [grocery]);
-  useEffect(() => { sv('funds', funds); }, [funds]);
-  useEffect(() => { sv('goal', goal); }, [goal]);
-  useEffect(() => { sv('snow', snow); }, [snow]);
-  useEffect(() => { sv('aval', aval); }, [aval]);
-  useEffect(() => { sv('tracker', tracker); }, [tracker]);
-  useEffect(() => { sv('trackerStart', trackerStart); }, [trackerStart]);
-  useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
-useEffect(() => { sv('bankBalance', bankBalance); }, [bankBalance]);
-
-useEffect(() => {
-  if (!dataLoaded) return;
-  saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, bankBalance });
-}, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, bankBalance, dataLoaded]);
-  
-  const saveToSupabase = async (data) => {
-  try {
-    await fetch('/api/dashboard-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ data })
-    });
-  } catch {}
-};
-
-  if (window.location.pathname === '/verify') return <VerifyPage />;
-  if (!authReady) return (
-    <div style={{ minHeight: '100vh', background: C.cream, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Segoe UI", system-ui, sans-serif' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
-        <div style={{ color: C.green, fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>Real Life Money</div>
-        <div style={{ color: C.charcoalLight, fontSize: 13, marginTop: 6 }}>Checking your membership…</div>
-      </div>
-    </div>
-  );
-const handleLogout = async () => {
-    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
-    window.location.href = 'https://myreallifemoney.memberful.com/auth/sign_out?return_to=https://dashboard.myreallifemoney.com';
-  };
-
-  const TABS = [
-    { id: 'everything', label: 'Everything Page' },
-    { id: 'payday',     label: 'Payday' },
-    { id: 'debt',       label: 'Debt & Credit' },
-    { id: 'snowball',   label: 'Snowball' },
-    { id: 'avalanche',  label: 'Avalanche' },
-    { id: 'goals',      label: 'Goals' },
-    { id: 'funds',      label: 'Sinking Funds' },
-    { id: 'tracker',    label: '7-Day Tracker' },
-  ];
-
-  return (
-    <div style={{ minHeight: '100vh', background: C.cream, fontFamily: '"Segoe UI", system-ui, sans-serif', color: C.charcoal }}>
-      <div style={{ background: C.green, padding: '12px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%' }} />
-          <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Coach | Journey</div>
-     {window.innerWidth >= 640 && <div style={{ color: 'white', fontSize: 13, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
-        </div>
-        <button onClick={handleLogout} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.4)', color: 'white', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>Sign Out</button>
-        </div>
-      <div style={{ background: 'white', borderBottom: `1px solid ${C.creamDark}`, overflowX: 'auto' }}>
-        <div style={{ display: 'flex', padding: '0 18px', minWidth: 'max-content' }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '11px 15px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: tab === t.id ? 700 : 500, color: tab === t.id ? C.green : C.charcoalLight, whiteSpace: 'nowrap', borderBottom: `3px solid ${tab === t.id ? C.green : 'transparent'}`, transition: 'all .15s' }}>{t.label}</button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
-        {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
-        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} bankBalance={bankBalance} setBankBalance={setBankBalance} />}
-        {tab === 'debt'       && <DebtPage bills={bills} />}
-        {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
-        {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
-        {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
-        {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'tracker'    && <SpendingTracker entries={tracker} setEntries={setTracker} startDate={trackerStart} setStartDate={setTrackerStart} />}
-      </div>
-
-      <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
-        {coach ? '✕ Close Coach' : '💬 Ask Coach'}
-      </button>
-
-      <CoachPanel bills={bills} paySettings={pay} activeTab={tab} isOpen={coach} onClose={() => setCoach(false)} />
-    </div>
-  );
-}
+      const greeting =
