@@ -421,7 +421,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
             const unclearedAmt = p.bt - clearedAmt;
             const showBank = i === 0 && +bankBalance > 0;
             const bankAfterAll = +(bankBalance||0) - unclearedAmt;
-            if (p.bills.length === 0) return null;
+            if (p.bills.length === 0 || i !== 0) return null;
             return (
               <div style={{ marginTop: 10, padding: '10px 12px', background: '#EEF3F8', borderRadius: 8, borderLeft: `3px solid ${C.slate}` }}>
                 <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 7 }}>🏦 Cleared vs. Pending</div>
