@@ -367,7 +367,7 @@ function EverythingPage({ bills, setBills }) {
 // =====================================================================
 function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides, paidBills, setPaidBills, bankBalance, setBankBalance }) {
   const periods = getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount);
-  let cum = +(bankBalance || 0);
+  let cum = 0;
   const pData = periods.map((p, i) => {
   const pb = getBillsForPeriod(bills, p.start, p.end);
   const bt = pb.reduce((s, b) => s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0)), 0);
