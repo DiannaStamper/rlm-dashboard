@@ -394,7 +394,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
         <Card key={i}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div><div style={{ fontWeight: 700, fontSize: 14, color: C.charcoal }}>Pay Period {i + 1}</div><div style={{ fontSize: 11, color: C.charcoalLight }}>{fmtD(p.start)} — {fmtD(p.end)}</div></div>
-            <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 700, fontSize: 18, color: C.green }}><input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} style={{ fontWeight: 700, fontSize: 18, color: C.green, background: 'transparent', border: 'none', textAlign: 'right', width: 130, padding: 0 }} /><span style={{ fontSize: 10, color: C.charcoalLight, marginLeft: 4, cursor: 'default' }}>✏️</span></div><div style={{ fontSize: 10, color: C.charcoalLight }}>paycheck</div></div></div>{p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0' }}>No bills due this period 🎉</div> : (<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}><thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount', '✓'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
+            <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 700, fontSize: 18, color: C.green }}><input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} style={{ fontWeight: 700, fontSize: 18, color: C.green, background: 'transparent', border: 'none', textAlign: 'right', width: 130, padding: 0 }} /><span style={{ fontSize: 10, color: C.charcoalLight, marginLeft: 4, cursor: 'default' }}>✏️</span></div><div style={{ fontSize: 10, color: C.charcoalLight }}>paycheck</div></div></div>{p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0' }}>No bills due this period 🎉</div> : (<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}><thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount', 'Cleared'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
              <tbody>{[...p.bills].sort((a,b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end)).map(b => { const pk = `${b.id}_${p.start.toISOString().slice(0,10)}`; const isPaid = !!paidBills[pk]; return <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: isPaid ? 0.55 : 1, background: isPaid ? '#f0faf4' : 'transparent' }}><td style={{ padding: '6px 7px', color: C.charcoalLight, textDecoration: isPaid ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td><td style={{ padding: '6px 7px', fontWeight: 600, textDecoration: isPaid ? 'line-through' : 'none' }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: isPaid ? C.green : '#c0392b', textDecoration: isPaid ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td><td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} onChange={() => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; })} style={{ accentColor: C.green, width: 16, height: 16, cursor: 'pointer' }} /></td></tr>; })}</tbody>
             </table>
           )}
@@ -412,6 +412,62 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
               ))}
             </div>
           </div>
+          {(() => {
+            const periodKey = p.start.toISOString().slice(0,10);
+            const clearedAmt = p.bills.reduce((s, b) => {
+              const pk = `${b.id}_${periodKey}`;
+              return paidBills[pk] ? s + (b.halfPayment ? (+b.amount||0)/2 : (+b.amount||0)) : s;
+            }, 0);
+            const unclearedAmt = p.bt - clearedAmt;
+            const showBank = i === 0 && +bankBalance > 0;
+            const bankAfterAll = +(bankBalance||0) - unclearedAmt;
+            if (p.bills.length === 0) return null;
+            return (
+              <div style={{ marginTop: 10, padding: '10px 12px', background: '#EEF3F8', borderRadius: 8, borderLeft: `3px solid ${C.slate}` }}>
+                <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 7 }}>🏦 Cleared vs. Pending</div>
+                <div style={{ display: 'grid', gridTemplateColumns: showBank ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 6 }}>
+                  {[
+                    ['Cleared', fmt(clearedAmt), C.green],
+                    ['Still to Clear', fmt(unclearedAmt), unclearedAmt > 0 ? '#c0392b' : C.green],
+                    ...(showBank ? [['Bank After All Clear', fmt(bankAfterAll), bankAfterAll >= 0 ? C.green : '#c0392b']] : [])
+                  ].map(([l, v, col]) => (
+                    <div key={l} style={{ background: l === 'Bank After All Clear' ? (bankAfterAll >= 0 ? '#d4edda' : '#f8d7da') : 'white', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase' }}>{l}</div>
+                      <div style={{ fontWeight: 700, color: col, fontSize: 14 }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          {(() => {
+            const periodKey = p.start.toISOString().slice(0,10);
+            const clearedAmt = p.bills.reduce((s, b) => {
+              const pk = `${b.id}_${periodKey}`;
+              return paidBills[pk] ? s + (b.halfPayment ? (+b.amount||0)/2 : (+b.amount||0)) : s;
+            }, 0);
+            const unclearedAmt = p.bt - clearedAmt;
+            const showBank = i === 0 && +bankBalance > 0;
+            const bankAfterAll = +(bankBalance||0) - unclearedAmt;
+            if (p.bills.length === 0) return null;
+            return (
+              <div style={{ marginTop: 10, padding: '10px 12px', background: '#EEF3F8', borderRadius: 8, borderLeft: `3px solid ${C.slate}` }}>
+                <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 7 }}>🏦 Cleared vs. Pending</div>
+                <div style={{ display: 'grid', gridTemplateColumns: showBank ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 6 }}>
+                  {[
+                    ['Cleared', fmt(clearedAmt), C.green],
+                    ['Still to Clear', fmt(unclearedAmt), unclearedAmt > 0 ? '#c0392b' : C.green],
+                    ...(showBank ? [['Bank After All Clear', fmt(bankAfterAll), bankAfterAll >= 0 ? C.green : '#c0392b']] : [])
+                  ].map(([l, v, col]) => (
+                    <div key={l} style={{ background: l === 'Bank After All Clear' ? (bankAfterAll >= 0 ? '#d4edda' : '#f8d7da') : 'white', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase' }}>{l}</div>
+                      <div style={{ fontWeight: 700, color: col, fontSize: 14 }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {p.cum < 0 && <div style={{ marginTop: 8, padding: '8px 12px', background: '#f8d7da', borderRadius: 7, fontSize: 12, color: '#842029' }}>⚠️ Short by <strong>{fmt(Math.abs(p.cum))}</strong>. Open your coach — there are always options.</div>}
           {p.cum > 0 && p.bills.length > 0 && <div style={{ marginTop: 8, padding: '8px 12px', background: '#d4edda', borderRadius: 7, fontSize: 12, color: '#155724' }}>💡 <strong>{fmt(p.cum)}</strong> left over. Extra debt payment? Sinking fund? Your call.</div>}
         </Card>
