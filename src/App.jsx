@@ -1213,7 +1213,7 @@ export default function App() {
       <div style={{ background: C.green, padding: '12px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src={rlmLogo} alt="RLM" style={{ height: 36, width: 36, borderRadius: '50%' }} />
-          <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Coach | Journey</div>
+          <div style={{ color: 'white', fontFamily: 'Georgia,serif', fontSize: 18, fontWeight: 700 }}>RLM Dashboard</div>
           {window.innerWidth >= 640 && <div style={{ color: 'white', fontSize: 13, fontStyle: 'italic' }}>See It - Understand It - Live It</div>}
         </div>
         <button onClick={handleLogout} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.4)', color: 'white', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>Sign Out</button>
