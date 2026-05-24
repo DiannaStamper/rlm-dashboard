@@ -319,7 +319,7 @@ function BillForm({ bill, onSave, onCancel }) {
 // =====================================================================
 // EVERYTHING PAGE
 // =====================================================================
-function EverythingPage({ bills, setBills }) {
+function EverythingPage({ bills, setBills, askCoach }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
   const [sortBy, setSortBy] = useState(null);
@@ -393,7 +393,7 @@ function EverythingPage({ bills, setBills }) {
                     <td style={{ padding: '8px 12px' }}><Badge text={bill.category} /></td>
                     <td style={{ padding: '8px 12px', fontWeight: 700, color: C.green }}>{bill.amount ? fmt(bill.amount) : '—'}</td>
                     <td style={{ padding: '8px 12px', color: C.charcoalLight }}>{bill.balance ? fmt(bill.balance) : '—'}</td>
-                    <td style={{ padding: '8px 12px' }}><div style={{ display: 'flex', gap: 5 }}><Btn small variant="ghost" onClick={() => setEditing(bill.id)}>Edit</Btn><Btn small variant="danger" onClick={() => del(bill.id)}>✕</Btn></div></td>
+                    <td style={{ padding: '8px 12px' }}><div style={{ display: 'flex', gap: 5, alignItems: 'center' }}><Btn small variant="ghost" onClick={() => setEditing(bill.id)}>Edit</Btn><Btn small variant="danger" onClick={() => del(bill.id)}>✕</Btn>{bill.company && <button onClick={() => askCoach(bill.company)} title={`Open coach about ${bill.company}`} style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', fontSize: 11, padding: '2px 6px', textDecoration: 'underline', fontFamily: 'inherit' }}>ask coach</button>}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -554,7 +554,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
 // =====================================================================
 // DEBT PAGE
 // =====================================================================
-function DebtPage({ bills, setBills }) {
+function DebtPage({ bills, setBills, askCoach }) {
   const db = bills.filter(b => ['Credit', 'Debt/Loan'].includes(b.category) && b.status !== 'Zero Balance');
   const tBal = db.reduce((s, b) => s + (+b.balance || 0), 0);
   const tLim = db.reduce((s, b) => s + (+b.creditLimit || 0), 0);
@@ -579,7 +579,7 @@ function DebtPage({ bills, setBills }) {
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead><tr style={{ background: C.green }}>{['Lender', 'Balance', 'Limit', 'Utilization', 'APR', 'Min Payment', 'Notes'].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700 }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ background: C.green }}>{['Lender', 'Balance', 'Limit', 'Utilization', 'APR', 'Min Payment', 'Notes', ''].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700 }}>{h}</th>)}</tr></thead>
                 <tbody>
                   {db.sort((a, b) => (a.company || '').localeCompare(b.company || '')).map((b, i) => {
                     const u = b.creditLimit ? (+b.balance || 0) / (+b.creditLimit) : null;
@@ -593,6 +593,7 @@ function DebtPage({ bills, setBills }) {
                         <td style={{ padding: '6px 8px' }}><input type="number" step="0.01" value={b.apr || ''} onChange={e => updateBill(b.id, 'apr', e.target.value)} onKeyDown={focusNextOnEnter} placeholder="0.00" style={{ ...cellInputStyle, textAlign: 'right' }} /></td>
                         <td style={{ padding: '6px 8px' }}><input type="number" step="0.01" value={b.minPayment || ''} onChange={e => updateBill(b.id, 'minPayment', e.target.value)} onKeyDown={focusNextOnEnter} placeholder="0.00" style={{ ...cellInputStyle, color: C.green, textAlign: 'right' }} /></td>
                         <td style={{ padding: '8px 12px', color: C.charcoalLight, fontSize: 11 }}>{b.notes || '—'}</td>
+                        <td style={{ padding: '8px 6px' }}>{b.company && <button onClick={() => askCoach(b.company)} title={`Open coach about ${b.company}`} style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', fontSize: 11, padding: '2px 6px', textDecoration: 'underline', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ask coach</button>}</td>
                       </tr>
                     );
                   })}
@@ -609,7 +610,7 @@ function DebtPage({ bills, setBills }) {
 // =====================================================================
 // DEBT PLAN (SNOWBALL + AVALANCHE)
 // =====================================================================
-function DebtPlanPage({ bills, amount, setAmount, mode }) {
+function DebtPlanPage({ bills, amount, setAmount, mode, askCoach }) {
   const isSnow = mode === 'snowball';
   const sorted = bills.filter(b => ['Credit', 'Debt/Loan'].includes(b.category) && b.status !== 'Zero Balance' && b.balance)
     .sort((a, b) => isSnow ? (+a.balance || 0) - (+b.balance || 0) : (+b.apr || 0) - (+a.apr || 0));
@@ -666,7 +667,7 @@ function DebtPlanPage({ bills, amount, setAmount, mode }) {
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead><tr style={{ background: col }}>{['#', isSnow ? 'Debt ↑ Smallest' : 'Debt ↓ Highest Rate', 'Balance', 'Rate', 'Min', 'This Paycheck', 'After'].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700 }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: col }}>{['#', isSnow ? 'Debt ↑ Smallest' : 'Debt ↓ Highest Rate', 'Balance', 'Rate', 'Min', 'This Paycheck', 'After', ''].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700 }}>{h}</th>)}</tr></thead>
               <tbody>
                 {rows.map((r, i) => {
                   const isTarget = !r.cleared && r === nextTarget;
@@ -681,6 +682,7 @@ function DebtPlanPage({ bills, amount, setAmount, mode }) {
                       <td style={{ padding: '8px 12px' }}>{fmt(r.minPayment)}</td>
                       <td style={{ padding: '8px 12px', fontWeight: 700, color: col, fontSize: 14 }}>{fmt(r.pay)}</td>
                       <td style={{ padding: '8px 12px', fontWeight: r.cleared ? 700 : 400, color: r.cleared ? C.green : C.charcoalLight }}>{r.cleared ? '✓ Cleared' : fmt(r.after)}</td>
+                      <td style={{ padding: '8px 6px' }}>{r.company && <button onClick={() => askCoach(r.company)} title={`Open coach about ${r.company}`} style={{ background: 'none', border: 'none', color: col, cursor: 'pointer', fontSize: 11, padding: '2px 6px', textDecoration: 'underline', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ask coach</button>}</td>
                     </tr>
                   );
                 })}
@@ -1025,9 +1027,12 @@ function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
 // =====================================================================
 // COACH PANEL
 // =====================================================================
-function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose }) {
+function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose, prefill, clearPrefill }) {
   const [msgs, setMsgs] = useState([]);
   const [inp, setInp] = useState('');
+  useEffect(() => {
+    if (prefill && isOpen) { setInp(prefill); clearPrefill(); }
+  }, [prefill, isOpen]);
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const [awaitingName, setAwaitingName] = useState(false);
@@ -1183,6 +1188,8 @@ export default function App() {
   const [bankBalance, setBankBalance] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
+  const [coachPrefill, setCoachPrefill] = useState('');
+  const askCoach = (billName) => { setCoachPrefill(`I want to talk about ${billName}.`); setCoach(true); };
   const [authReady, setAuthReady] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
@@ -1305,11 +1312,11 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
-        {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
+        {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} askCoach={askCoach} />}
         {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} skippedBills={skippedBills} setSkippedBills={setSkippedBills} bankBalance={bankBalance} setBankBalance={setBankBalance} />}
-        {tab === 'debt'       && <DebtPage bills={bills} setBills={setBills} />}
-        {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
-        {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
+        {tab === 'debt'       && <DebtPage bills={bills} setBills={setBills} askCoach={askCoach} />}
+        {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" askCoach={askCoach} />}
+        {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" askCoach={askCoach} />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
         {tab === 'tracker'    && <SpendingTracker entries={tracker} setEntries={setTracker} startDate={trackerStart} setStartDate={setTrackerStart} />}
@@ -1319,7 +1326,7 @@ export default function App() {
         {coach ? '✕ Close Coach' : '💬 Ask Coach'}
       </button>
 
-      <CoachPanel bills={bills} paySettings={pay} activeTab={tab} isOpen={coach} onClose={() => setCoach(false)} />
+      <CoachPanel bills={bills} paySettings={pay} activeTab={tab} isOpen={coach} onClose={() => setCoach(false)} prefill={coachPrefill} clearPrefill={() => setCoachPrefill('')} />
     </div>
   );
 }
