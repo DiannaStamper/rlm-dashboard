@@ -311,11 +311,44 @@ function BillForm({ bill, onSave, onCancel }) {
 function EverythingPage({ bills, setBills }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [sortBy, setSortBy] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
   const save = data => { if (editing) { setBills(p => p.map(b => b.id === data.id ? data : b)); setEditing(null); } else { setBills(p => [...p, data]); setAdding(false); } };
   const del = id => setBills(p => p.filter(b => b.id !== id));
   const active = bills.filter(b => b.status !== 'Zero Balance');
   const subs = active.filter(b => b.category === 'Subscription');
   const subTotal = subs.reduce((s, b) => s + (+b.amount || 0), 0);
+
+  const COLS = [
+    { label: 'Status',   key: 'status',   type: 'string' },
+    { label: 'Due',      key: 'dateDue',  type: 'number' },
+    { label: 'Company',  key: 'company',  type: 'string' },
+    { label: 'Category', key: 'category', type: 'string' },
+    { label: 'Payment',  key: 'amount',   type: 'number' },
+    { label: 'Balance',  key: 'balance',  type: 'number' },
+  ];
+
+  const handleSort = key => {
+    if (sortBy !== key) { setSortBy(key); setSortDir('asc'); }
+    else if (sortDir === 'asc') { setSortDir('desc'); }
+    else { setSortBy(null); setSortDir('asc'); }
+  };
+
+  const sortedBills = (() => {
+    if (!sortBy) return bills;
+    const col = COLS.find(c => c.key === sortBy);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...bills].sort((a, b) => {
+      const av = a[sortBy], bv = b[sortBy];
+      const aEmpty = av === '' || av == null;
+      const bEmpty = bv === '' || bv == null;
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      if (col.type === 'number') return (+av - +bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+  })();
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
@@ -337,9 +370,9 @@ function EverythingPage({ bills, setBills }) {
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead><tr style={{ background: C.green }}>{['Status', 'Due', 'Company', 'Category', 'Payment', 'Balance', ''].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: C.green }}>{COLS.map(c => <th key={c.label} onClick={() => handleSort(c.key)} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>{c.label}{sortBy === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}</th>)}<th style={{ padding: '9px 12px' }}></th></tr></thead>
               <tbody>
-                {bills.map((bill, i) => editing === bill.id ? (
+                {sortedBills.map((bill, i) => editing === bill.id ? (
                   <tr key={bill.id}><td colSpan={7} style={{ padding: 10 }}><BillForm bill={bill} onSave={save} onCancel={() => setEditing(null)} /></td></tr>
                 ) : (
                   <tr key={bill.id} style={{ background: bill.status === 'Zero Balance' ? '#f8f9fa' : i % 2 ? 'white' : C.cream, opacity: bill.status === 'Zero Balance' ? .6 : 1 }}>
@@ -411,7 +444,15 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
              <tbody>{[...p.bills].sort((a,b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end)).map(b => { const pk = `${b.id}_${p.start.toISOString().slice(0,10)}`; const isPaid = !!paidBills[pk]; return <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: isPaid ? 0.55 : 1, background: isPaid ? '#f0faf4' : 'transparent' }}><td style={{ padding: '6px 7px', color: C.charcoalLight, textDecoration: isPaid ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td><td style={{ padding: '6px 7px', fontWeight: 600, textDecoration: isPaid ? 'line-through' : 'none' }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: isPaid ? C.green : '#c0392b', textDecoration: isPaid ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td><td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} onChange={() => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; })} style={{ accentColor: C.green, width: 16, height: 16, cursor: 'pointer' }} /></td></tr>; })}</tbody>
             </table>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
+          {(() => { const balance = (+p.amt || 0) - (+p.bt || 0) - (+p.gr || 0); return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
+            <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{i === 0 ? 'Paycheck Received' : 'Estimated Paycheck'}</div>
+              {i === 0
+                ? <div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmt(+paySettings.amount)}</div>
+                : <input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} onKeyDown={focusNextOnEnter} style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: C.green, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
+              }
+            </div>
             <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Total Bills Due</div>
               <div style={{ fontWeight: 700, color: '#c0392b', fontSize: 14 }}>{fmt(p.bt)}</div>
@@ -420,14 +461,12 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
               <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Groceries & Extras</div>
               <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
             </div>
-            <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{i === 0 ? 'Paycheck Received' : 'Estimated Paycheck'}</div>
-              {i === 0
-                ? <div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmt(+paySettings.amount)}</div>
-                : <input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} onKeyDown={focusNextOnEnter} style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: C.green, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
-              }
+            <div style={{ background: balance >= 0 ? '#d4edda' : '#f8d7da', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: balance >= 0 ? '#155724' : '#842029', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Balance</div>
+              <div style={{ fontWeight: 700, color: balance >= 0 ? C.green : '#c0392b', fontSize: 14 }}>{fmt(balance)}</div>
             </div>
           </div>
+          ); })()}
           {i === 0 && +bankBalance > 0 && p.bills.length > 0 && (() => {
             const periodKey = p.start.toISOString().slice(0,10);
             const clearedAmt = p.bills.reduce((s, b) => {
