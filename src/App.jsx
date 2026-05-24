@@ -8,7 +8,7 @@ import VerifyPage from './VerifyPage';
 const C = {
   green: '#2B5E3F', greenAlt: '#2D6A4A', cream: '#F7F3EB', creamDark: '#EDE7D9',
   sage: '#7A8B75', sageLight: '#A8B9A3', charcoal: '#2C2C2C', charcoalLight: '#4A4A4A',
-  gold: '#C9A440', goldLight: '#E4BB54', espresso: '#3E2918', slate: '#4F7A9E',
+  gold: '#C9A440', goldLight: '#E4BB54', espresso: '#3E2918', slate: '#4F7A9E', slateDark: '#3D6289',
 };
 
 // =====================================================================
@@ -440,10 +440,35 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: C.charcoal }}>Pay Period {i + 1}</div>
             <div style={{ fontSize: 11, color: C.charcoalLight }}>{fmtD(p.start)} — {fmtD(p.end)}</div>
-          </div>{p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0' }}>No bills due this period 🎉</div> : (<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}><thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount', 'Cleared'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
-             <tbody>{[...p.bills].sort((a,b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end)).map(b => { const pk = `${b.id}_${p.start.toISOString().slice(0,10)}`; const isPaid = !!paidBills[pk]; return <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: isPaid ? 0.55 : 1, background: isPaid ? '#f0faf4' : 'transparent' }}><td style={{ padding: '6px 7px', color: C.charcoalLight, textDecoration: isPaid ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td><td style={{ padding: '6px 7px', fontWeight: 600, textDecoration: isPaid ? 'line-through' : 'none' }}>{b.company}</td><td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: isPaid ? C.green : '#c0392b', textDecoration: isPaid ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td><td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} onChange={() => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; })} style={{ accentColor: C.green, width: 16, height: 16, cursor: 'pointer' }} /></td></tr>; })}</tbody>
-            </table>
-          )}
+          </div>{p.bills.length === 0 ? <div style={{ color: C.charcoalLight, fontSize: 12, padding: '10px 0' }}>No bills due this period 🎉</div> : (() => {
+            const periodKey = p.start.toISOString().slice(0,10);
+            const sortByDate = (a, b) => getActualDueDate(a.dateDue, p.start, p.end) - getActualDueDate(b.dateDue, p.start, p.end);
+            const halfBills = p.bills.filter(b => b.halfPayment).sort(sortByDate);
+            const regularBills = p.bills.filter(b => !b.halfPayment).sort(sortByDate);
+            const renderRow = (b, isHalf) => {
+              const pk = `${b.id}_${periodKey}`;
+              const isPaid = !!paidBills[pk];
+              return (
+                <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: isPaid ? 0.55 : 1, background: isHalf ? C.slateDark : (isPaid ? '#f0faf4' : 'transparent') }}>
+                  <td style={{ padding: '6px 7px', color: isHalf ? 'white' : C.charcoalLight, textDecoration: isPaid ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td>
+                  <td style={{ padding: '6px 7px', fontWeight: isHalf ? 700 : 600, color: isHalf ? 'white' : 'inherit', textDecoration: isPaid ? 'line-through' : 'none' }}>{b.company}</td>
+                  <td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: isHalf ? 'white' : (isPaid ? C.green : '#c0392b'), textDecoration: isPaid ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td>
+                  <td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} onChange={() => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; })} style={{ accentColor: isHalf ? 'white' : C.green, width: 16, height: 16, cursor: 'pointer' }} /></td>
+                </tr>
+              );
+            };
+            return (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}>
+                <thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount', 'Cleared'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {halfBills.length > 0 && <tr><td colSpan={4} style={{ padding: '8px 7px 2px', fontSize: 10, fontWeight: 800, color: C.slateDark, letterSpacing: 0.5 }}>½ PAID FIRST</td></tr>}
+                  {halfBills.map(b => renderRow(b, true))}
+                  {halfBills.length > 0 && regularBills.length > 0 && <tr><td colSpan={4} style={{ borderBottom: `3px solid ${C.slateDark}`, padding: 0 }}></td></tr>}
+                  {regularBills.map(b => renderRow(b, false))}
+                </tbody>
+              </table>
+            );
+          })()}
           {(() => { const balance = (+p.amt || 0) - (+p.bt || 0) - (+p.gr || 0); return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, paddingTop: 10, borderTop: `1px solid ${C.creamDark}` }}>
             <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
