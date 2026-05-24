@@ -602,34 +602,52 @@ function DebtPlanPage({ bills, amount, setAmount, mode }) {
   const isSnow = mode === 'snowball';
   const sorted = bills.filter(b => ['Credit', 'Debt/Loan'].includes(b.category) && b.status !== 'Zero Balance' && b.balance)
     .sort((a, b) => isSnow ? (+a.balance || 0) - (+b.balance || 0) : (+b.apr || 0) - (+a.apr || 0));
-  const total = +amount || 0;
-  const tMin = sorted.reduce((s, b) => s + (+b.minPayment || 0), 0);
-  const extra = Math.max(0, total - tMin);
-  let rem = extra;
-  const rows = sorted.map((bill, i) => {
-    const min = +bill.minPayment || 0;
+  const tMin = sorted.reduce((s, b) => s + Math.min(+b.balance || 0, +b.minPayment || 0), 0);
+
+  let pool = +amount || 0;
+  const rows = sorted.map(bill => {
+    const balance = +bill.balance || 0;
+    const min = Math.min(balance, +bill.minPayment || 0);
     let pay = min;
-    if (i === 0 && rem > 0) { pay = Math.min(+bill.balance, min + rem); rem -= (pay - min); }
-    return { ...bill, pay, months: +bill.balance && pay > 0 ? Math.ceil(+bill.balance / pay) : null };
+    let after = balance - min;
+    if (pool > 0 && after > 0) {
+      const applied = Math.min(pool, after);
+      pay += applied;
+      pool -= applied;
+      after -= applied;
+    }
+    return { ...bill, pay, after, cleared: pay > 0 && after <= 0 };
   });
+
+  const clearedRows = rows.filter(r => r.cleared);
+  const nextTarget = rows.find(r => !r.cleared);
   const col = isSnow ? C.green : C.slate;
+
+  let summary = '';
+  if ((+amount || 0) > 0 && rows.length > 0) {
+    if (clearedRows.length > 0) {
+      const names = clearedRows.map(r => r.company).join(', ');
+      summary = `Sending ${fmt(+amount)} extra this paycheck clears ${names}.`;
+      if (nextTarget) summary += ` Your ${isSnow ? 'snowball' : 'avalanche'} moves to ${nextTarget.company} next.`;
+      else summary += ' That clears your last debt.';
+    } else if (nextTarget) {
+      summary = `Sending ${fmt(+amount)} extra this paycheck brings ${nextTarget.company} down to ${fmt(nextTarget.after)}.`;
+    }
+  }
+
   return (
     <div>
       <h2 style={{ margin: '0 0 3px', color: col, fontFamily: 'Georgia,serif', fontSize: 20 }}>Debt {isSnow ? 'Snowball' : 'Avalanche'}</h2>
       <p style={{ margin: '0 0 14px', color: C.charcoalLight, fontSize: 12 }}>{isSnow ? 'Smallest balance first. Fast wins. Big motivation.' : 'Highest interest rate first. Mathematically the cheapest path.'}</p>
       <Card>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>💵 Total Available This Month</label>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '9px 12px', border: `2px solid ${isSnow ? C.gold : C.slate}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, boxSizing: 'border-box', background: isSnow ? '#fffbf0' : '#f0f4f8' }} />
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ textAlign: 'center', background: C.cream, borderRadius: 8, padding: '10px 14px' }}>
-            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>Min Payments</div>
+            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>Min Payments This Month</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: C.charcoal }}>{fmt(tMin)}</div>
           </div>
-          <div style={{ textAlign: 'center', background: isSnow ? '#d4edda' : '#d0e8f5', borderRadius: 8, padding: '10px 14px' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 3, color: isSnow ? '#155724' : '#084298' }}>Extra → Debt #1</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: col }}>{fmt(extra)}</div>
+          <div>
+            <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>💵 Extra This Paycheck</label>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '9px 12px', border: `2px solid ${isSnow ? C.gold : C.slate}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, color: C.charcoal, boxSizing: 'border-box', background: isSnow ? '#fffbf0' : '#f0f4f8', outline: 'none' }} />
           </div>
         </div>
       </Card>
@@ -637,22 +655,28 @@ function DebtPlanPage({ bills, amount, setAmount, mode }) {
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead><tr style={{ background: col }}>{['#', isSnow ? 'Debt ↑ Smallest' : 'Debt ↓ Highest Rate', 'Balance', 'Rate', 'Min', 'Est. Payoff', 'Pay This Month'].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700 }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: col }}>{['#', isSnow ? 'Debt ↑ Smallest' : 'Debt ↓ Highest Rate', 'Balance', 'Rate', 'Min', 'This Paycheck', 'After'].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700 }}>{h}</th>)}</tr></thead>
               <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.id} style={{ background: i === 0 ? (isSnow ? '#d4edda' : '#d0e8f5') : i % 2 ? 'white' : C.cream }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 700, color: i === 0 ? col : C.charcoalLight }}>{i + 1}</td>
-                    <td style={{ padding: '8px 12px', fontWeight: 600 }}>{r.company}</td>
-                    <td style={{ padding: '8px 12px' }}>{fmt(r.balance)}</td>
-                    <td style={{ padding: '8px 12px', fontWeight: isSnow ? 400 : 700, color: isSnow ? C.charcoalLight : '#c0392b' }}>{r.apr ? `${(+r.apr).toFixed(1)}%` : '—'}</td>
-                    <td style={{ padding: '8px 12px' }}>{fmt(r.minPayment)}</td>
-                    <td style={{ padding: '8px 12px', color: C.charcoalLight }}>{r.months ? `~${r.months} mo` : '—'}</td>
-                    <td style={{ padding: '8px 12px', fontWeight: 700, color: col, fontSize: 14 }}>{fmt(r.pay)}</td>
-                  </tr>
-                ))}
+                {rows.map((r, i) => {
+                  const isTarget = !r.cleared && r === nextTarget;
+                  const rowBg = r.cleared ? '#d4edda' : (isTarget ? (isSnow ? '#fffbf0' : '#f0f4f8') : (i % 2 ? 'white' : C.cream));
+                  const strike = r.cleared ? 'line-through' : 'none';
+                  return (
+                    <tr key={r.id} style={{ background: rowBg, opacity: r.cleared ? 0.75 : 1 }}>
+                      <td style={{ padding: '8px 12px', fontWeight: 700, color: r.cleared ? C.green : (isTarget ? col : C.charcoalLight) }}>{r.cleared ? '✓' : i + 1}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: 600, textDecoration: strike }}>{r.company}</td>
+                      <td style={{ padding: '8px 12px', textDecoration: strike }}>{fmt(r.balance)}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: isSnow ? 400 : 700, color: isSnow ? C.charcoalLight : '#c0392b' }}>{r.apr ? `${(+r.apr).toFixed(1)}%` : '—'}</td>
+                      <td style={{ padding: '8px 12px' }}>{fmt(r.minPayment)}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: 700, color: col, fontSize: 14 }}>{fmt(r.pay)}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: r.cleared ? 700 : 400, color: r.cleared ? C.green : C.charcoalLight }}>{r.cleared ? '✓ Cleared' : fmt(r.after)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {summary && <div style={{ padding: '12px 16px', background: C.cream, color: C.charcoal, fontSize: 13, lineHeight: 1.5, borderTop: `1px solid ${C.creamDark}` }}>{summary}</div>}
         </Card>
       )}
     </div>
