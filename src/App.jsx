@@ -459,7 +459,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
             </div>
             <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Groceries & Extras</div>
-              <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
+              <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: C.charcoal, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
             </div>
             <div style={{ background: balance >= 0 ? '#d4edda' : '#f8d7da', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: balance >= 0 ? '#155724' : '#842029', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Balance</div>
