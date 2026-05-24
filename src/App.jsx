@@ -280,7 +280,7 @@ function BillForm({ bill, onSave, onCancel }) {
         <FI label="Status" value={form.status} onChange={e => set('status', e.target.value)} options={STATS} />
         <FI label="Due Day (1–31)" value={form.dateDue} onChange={e => set('dateDue', e.target.value)} type="number" placeholder="1" />
         <FI label="Payment ($)" value={form.amount} onChange={e => set('amount', e.target.value)} type="number" placeholder="0.00" />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: 'span 2', marginTop: 2 }}><input type="checkbox" id="halfPayment" checked={!!form.halfPayment} onChange={e => set('halfPayment', e.target.checked)} style={{ accentColor: C.green, width: 16, height: 16 }} /><label htmlFor="halfPayment" style={{ fontSize: 12, color: C.charcoal, cursor: 'pointer' }}>½ Half Payment Strategy — split this bill across two paychecks</label></div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, gridColumn: 'span 2', marginTop: 2 }}><input type="checkbox" id="halfPayment" checked={!!form.halfPayment} onChange={e => set('halfPayment', e.target.checked)} style={{ accentColor: C.green, width: 16, height: 16, marginTop: 2 }} /><label htmlFor="halfPayment" style={{ fontSize: 12, color: C.charcoal, cursor: 'pointer', lineHeight: 1.45 }}><div>½ Half Payment Strategy — pay half at every payday</div><div style={{ fontSize: 11, color: C.charcoalLight, marginTop: 2 }}>Third-paycheck months dig into principal or pay you ahead.</div></label></div>
       </div>
       {isCD && (
         <div style={{ paddingTop: 8, borderTop: `1px solid ${C.creamDark}`, marginTop: 2 }}>
