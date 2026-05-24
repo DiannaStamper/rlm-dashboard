@@ -297,11 +297,44 @@ function BillForm({ bill, onSave, onCancel }) {
 function EverythingPage({ bills, setBills }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [sortBy, setSortBy] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
   const save = data => { if (editing) { setBills(p => p.map(b => b.id === data.id ? data : b)); setEditing(null); } else { setBills(p => [...p, data]); setAdding(false); } };
   const del = id => setBills(p => p.filter(b => b.id !== id));
   const active = bills.filter(b => b.status !== 'Zero Balance');
   const subs = active.filter(b => b.category === 'Subscription');
   const subTotal = subs.reduce((s, b) => s + (+b.amount || 0), 0);
+
+  const COLS = [
+    { label: 'Status',   key: 'status',   type: 'string' },
+    { label: 'Due',      key: 'dateDue',  type: 'number' },
+    { label: 'Company',  key: 'company',  type: 'string' },
+    { label: 'Category', key: 'category', type: 'string' },
+    { label: 'Payment',  key: 'amount',   type: 'number' },
+    { label: 'Balance',  key: 'balance',  type: 'number' },
+  ];
+
+  const handleSort = key => {
+    if (sortBy !== key) { setSortBy(key); setSortDir('asc'); }
+    else if (sortDir === 'asc') { setSortDir('desc'); }
+    else { setSortBy(null); setSortDir('asc'); }
+  };
+
+  const sortedBills = (() => {
+    if (!sortBy) return bills;
+    const col = COLS.find(c => c.key === sortBy);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...bills].sort((a, b) => {
+      const av = a[sortBy], bv = b[sortBy];
+      const aEmpty = av === '' || av == null;
+      const bEmpty = bv === '' || bv == null;
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      if (col.type === 'number') return (+av - +bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+  })();
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
@@ -323,9 +356,9 @@ function EverythingPage({ bills, setBills }) {
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead><tr style={{ background: C.green }}>{['Status', 'Due', 'Company', 'Category', 'Payment', 'Balance', ''].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: C.green }}>{COLS.map(c => <th key={c.label} onClick={() => handleSort(c.key)} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>{c.label}{sortBy === c.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}</th>)}<th style={{ padding: '9px 12px' }}></th></tr></thead>
               <tbody>
-                {bills.map((bill, i) => editing === bill.id ? (
+                {sortedBills.map((bill, i) => editing === bill.id ? (
                   <tr key={bill.id}><td colSpan={7} style={{ padding: 10 }}><BillForm bill={bill} onSave={save} onCancel={() => setEditing(null)} /></td></tr>
                 ) : (
                   <tr key={bill.id} style={{ background: bill.status === 'Zero Balance' ? '#f8f9fa' : i % 2 ? 'white' : C.cream, opacity: bill.status === 'Zero Balance' ? .6 : 1 }}>
