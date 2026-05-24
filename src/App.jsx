@@ -1070,16 +1070,46 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose, prefill, c
 
   const handleImage = (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
+    reader.onerror = () => {
+      console.error('FileReader failed', reader.error);
+      alert('Could not read that image. Try a different one?');
+    };
     reader.onload = ev => {
-      const dataUrl = ev.target.result;
-      setImgData(dataUrl.split(',')[1]);
-      setImgType(file.type || 'image/jpeg');
-      setImgPreview(dataUrl);
+      const img = new Image();
+      img.onerror = () => {
+        console.error('Image decode failed for type', file.type);
+        alert('That image format is not supported here (HEIC/HEIF photos from iPhone can fail). Try saving as JPEG or PNG and uploading again.');
+      };
+      img.onload = () => {
+        try {
+          const MAX = 1280;
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          const resizedUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const base64 = resizedUrl.split(',')[1];
+          if (!base64) throw new Error('Empty base64 after encode');
+          setImgData(base64);
+          setImgType('image/jpeg');
+          setImgPreview(resizedUrl);
+        } catch (err) {
+          console.error('Resize failed', err);
+          alert('Could not process that image. Try a different one?');
+        }
+      };
+      img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
   const clearImage = () => { setImgData(null); setImgType(null); setImgPreview(null); };
