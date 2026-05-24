@@ -505,12 +505,14 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
 // =====================================================================
 // DEBT PAGE
 // =====================================================================
-function DebtPage({ bills }) {
+function DebtPage({ bills, setBills }) {
   const db = bills.filter(b => ['Credit', 'Debt/Loan'].includes(b.category) && b.status !== 'Zero Balance');
   const tBal = db.reduce((s, b) => s + (+b.balance || 0), 0);
   const tLim = db.reduce((s, b) => s + (+b.creditLimit || 0), 0);
   const tMin = db.reduce((s, b) => s + (+b.minPayment || 0), 0);
   const util = tLim > 0 ? tBal / tLim : 0;
+  const updateBill = (id, field, value) => setBills(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+  const cellInputStyle = { width: '100%', padding: '5px 7px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 12, fontWeight: 700, color: C.charcoal, boxSizing: 'border-box', background: 'white', outline: 'none' };
   return (
     <div>
       <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>Debt & Credit</h2>
@@ -530,17 +532,17 @@ function DebtPage({ bills }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead><tr style={{ background: C.green }}>{['Lender', 'Balance', 'Limit', 'Utilization', 'APR', 'Min Payment', 'Notes'].map(h => <th key={h} style={{ padding: '9px 12px', textAlign: 'left', color: 'white', fontWeight: 700 }}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {db.sort((a, b) => (+b.balance || 0) - (+a.balance || 0)).map((b, i) => {
+                  {db.sort((a, b) => (a.company || '').localeCompare(b.company || '')).map((b, i) => {
                     const u = b.creditLimit ? (+b.balance || 0) / (+b.creditLimit) : null;
                     const uc = u === null ? C.charcoalLight : u < .1 ? C.green : u < .3 ? C.gold : u < .5 ? '#e67e22' : '#c0392b';
                     return (
                       <tr key={b.id} style={{ background: i % 2 ? 'white' : C.cream }}>
                         <td style={{ padding: '8px 12px', fontWeight: 700 }}>{b.company}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 700, color: C.espresso }}>{fmt(b.balance)}</td>
-                        <td style={{ padding: '8px 12px', color: C.charcoalLight }}>{b.creditLimit ? fmt(b.creditLimit) : '—'}</td>
+                        <td style={{ padding: '6px 8px' }}><input type="number" step="0.01" value={b.balance || ''} onChange={e => updateBill(b.id, 'balance', e.target.value)} onKeyDown={focusNextOnEnter} placeholder="0.00" style={{ ...cellInputStyle, color: C.espresso, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '6px 8px' }}><input type="number" step="0.01" value={b.creditLimit || ''} onChange={e => updateBill(b.id, 'creditLimit', e.target.value)} onKeyDown={focusNextOnEnter} placeholder="0.00" style={{ ...cellInputStyle, textAlign: 'right' }} /></td>
                         <td style={{ padding: '8px 12px' }}>{u !== null ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 60, height: 6, background: C.creamDark, borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${Math.min(u * 100, 100)}%`, height: '100%', background: uc }} /></div><span style={{ color: uc, fontWeight: 700 }}>{(u * 100).toFixed(0)}%</span></div> : '—'}</td>
-                        <td style={{ padding: '8px 12px', color: C.charcoalLight }}>{b.apr ? `${(+b.apr).toFixed(1)}%` : '—'}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 600, color: C.green }}>{fmt(b.minPayment)}</td>
+                        <td style={{ padding: '6px 8px' }}><input type="number" step="0.01" value={b.apr || ''} onChange={e => updateBill(b.id, 'apr', e.target.value)} onKeyDown={focusNextOnEnter} placeholder="0.00" style={{ ...cellInputStyle, textAlign: 'right' }} /></td>
+                        <td style={{ padding: '6px 8px' }}><input type="number" step="0.01" value={b.minPayment || ''} onChange={e => updateBill(b.id, 'minPayment', e.target.value)} onKeyDown={focusNextOnEnter} placeholder="0.00" style={{ ...cellInputStyle, color: C.green, textAlign: 'right' }} /></td>
                         <td style={{ padding: '8px 12px', color: C.charcoalLight, fontSize: 11 }}>{b.notes || '—'}</td>
                       </tr>
                     );
@@ -1229,7 +1231,7 @@ export default function App() {
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
         {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} bankBalance={bankBalance} setBankBalance={setBankBalance} />}
-        {tab === 'debt'       && <DebtPage bills={bills} />}
+        {tab === 'debt'       && <DebtPage bills={bills} setBills={setBills} />}
         {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
