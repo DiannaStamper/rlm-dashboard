@@ -429,7 +429,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
         <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.green, marginBottom: 10, fontSize: 14 }}>⚙️ Setup</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
           <FI label="How often am I paid?" value={paySettings.frequency} onChange={e => setPaySettings(p => ({ ...p, frequency: e.target.value }))} options={FREQS} />
-          <FI label="Next paycheck date" value={paySettings.nextDate} onChange={e => setPaySettings(p => ({ ...p, nextDate: e.target.value }))} type="date" />
+          <FI label="PAYDAY" value={paySettings.nextDate} onChange={e => setPaySettings(p => ({ ...p, nextDate: e.target.value }))} type="date" />
           <FI label="Paycheck amount ($)" value={paySettings.amount} onChange={e => setPaySettings(p => ({ ...p, amount: e.target.value }))} type="number" placeholder="0.00" />
           <FI label="Current bank balance ($)" value={bankBalance} onChange={e => setBankBalance(e.target.value)} type="number" placeholder="0.00" />
         </div>
