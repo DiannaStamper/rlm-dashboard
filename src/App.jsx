@@ -167,6 +167,20 @@ const fmtD = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day:
 const getSuffix = n => { if (n >= 11 && n <= 13) return 'th'; switch (n % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; } };
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
+const focusNextOnEnter = e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const els = Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=file]):not([type=checkbox]):not([disabled]), select:not([disabled]), textarea:not([disabled])'));
+  const idx = els.indexOf(e.currentTarget);
+  if (idx >= 0 && idx < els.length - 1) {
+    const next = els[idx + 1];
+    next.focus();
+    if (typeof next.select === 'function') { try { next.select(); } catch { /* select not supported */ } }
+  } else {
+    e.currentTarget.blur();
+  }
+};
+
 const CATS = ['Credit', 'Debt/Loan', 'Subscription', 'Utility', 'Insurance', 'Housing', 'Transportation', 'Food', 'Medical', 'Other'];
 const STATS = ['Confirmed', 'Estimate', 'Zero Balance'];
 const FREQS = ['Weekly', 'Biweekly', 'Semi-monthly', 'Monthly'];
@@ -243,8 +257,8 @@ function FI({ label, value, onChange, type = 'text', placeholder, options }) {
   const base = { width: '100%', padding: '7px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', boxSizing: 'border-box', outline: 'none', color: '#2C2C2C' };  return (
     <div style={{ marginBottom: 8 }}>
       {label && <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, marginBottom: 2, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .3 }}>{label}</label>}
-      {options ? <select value={value} onChange={onChange} style={base}>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>
-        : <input type={type} value={value} onChange={onChange} placeholder={placeholder} style={base} />}
+      {options ? <select value={value} onChange={onChange} onKeyDown={focusNextOnEnter} style={base}>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>
+        : <input type={type} value={value} onChange={onChange} onKeyDown={focusNextOnEnter} placeholder={placeholder} style={base} />}
     </div>
   );
 }
@@ -436,7 +450,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
               <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{i === 0 ? 'Paycheck Received' : 'Estimated Paycheck'}</div>
               {i === 0
                 ? <div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmt(+paySettings.amount)}</div>
-                : <input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: C.green, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
+                : <input type="number" value={paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : paySettings.amount} onChange={e => setPaycheckOverrides(prev => Object.assign({}, prev, {[i]: +e.target.value}))} onKeyDown={focusNextOnEnter} style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: C.green, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
               }
             </div>
             <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
@@ -445,7 +459,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
             </div>
             <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Groceries & Extras</div>
-              <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={e => e.key === 'Enter' && e.target.blur()} placeholder="$0.00" style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
+              <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
             </div>
             <div style={{ background: balance >= 0 ? '#d4edda' : '#f8d7da', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: balance >= 0 ? '#155724' : '#842029', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Balance</div>
@@ -567,7 +581,7 @@ function DebtPlanPage({ bills, amount, setAmount, mode }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <div>
             <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>💵 Total Available This Month</label>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="$0.00" style={{ width: '100%', padding: '9px 12px', border: `2px solid ${isSnow ? C.gold : C.slate}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, boxSizing: 'border-box', background: isSnow ? '#fffbf0' : '#f0f4f8' }} />
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '9px 12px', border: `2px solid ${isSnow ? C.gold : C.slate}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, boxSizing: 'border-box', background: isSnow ? '#fffbf0' : '#f0f4f8' }} />
           </div>
           <div style={{ textAlign: 'center', background: C.cream, borderRadius: 8, padding: '10px 14px' }}>
             <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>Min Payments</div>
@@ -784,6 +798,7 @@ function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
               type="number"
               value={guess}
               onChange={e => setGuess(e.target.value)}
+              onKeyDown={focusNextOnEnter}
               placeholder="$0.00"
               style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 14, background: 'white', boxSizing: 'border-box', color: '#2C2C2C' }}
             />
