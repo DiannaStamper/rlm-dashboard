@@ -412,11 +412,15 @@ function EverythingPage({ bills, setBills }) {
 // =====================================================================
 // PAYDAY PAGE
 // =====================================================================
-function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides, paidBills, setPaidBills, bankBalance, setBankBalance }) {
+function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides, paidBills, setPaidBills, skippedBills, setSkippedBills, bankBalance, setBankBalance }) {
   const periods = getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount);
   const pData = periods.map((p, i) => {
   const pb = getBillsForPeriod(bills, p.start, p.end);
-  const bt = pb.reduce((s, b) => s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0)), 0);
+  const periodKey = p.start.toISOString().slice(0,10);
+  const bt = pb.reduce((s, b) => {
+    if (skippedBills[`${b.id}_${periodKey}`]) return s;
+    return s + (b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0));
+  }, 0);
   const gr = +(groceryBudgets[i] || 0);
   const amt = i === 0 ? +paySettings.amount : +(paycheckOverrides[i] !== undefined ? paycheckOverrides[i] : p.amt);
   return { ...p, amt, bills: pb, bt, gr };
@@ -448,22 +452,30 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
             const renderRow = (b, isHalf) => {
               const pk = `${b.id}_${periodKey}`;
               const isPaid = !!paidBills[pk];
+              const isSkipped = !!skippedBills[pk];
+              const toggleSkip = () => setSkippedBills(prev => { const next = {...prev}; if (isSkipped) delete next[pk]; else next[pk] = true; return next; });
+              const togglePaid = () => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; });
+              const lineThrough = isPaid || isSkipped;
+              const rowBg = isSkipped ? '#f0f0f0' : (isHalf ? C.slateDark : (isPaid ? '#f0faf4' : 'transparent'));
+              const rowOpacity = isSkipped ? 0.45 : (isPaid ? 0.55 : 1);
+              const textOnHalf = isHalf && !isSkipped;
               return (
-                <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: isPaid ? 0.55 : 1, background: isHalf ? C.slateDark : (isPaid ? '#f0faf4' : 'transparent') }}>
-                  <td style={{ padding: '6px 7px', color: isHalf ? 'white' : C.charcoalLight, textDecoration: isPaid ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td>
-                  <td style={{ padding: '6px 7px', fontWeight: isHalf ? 700 : 600, color: isHalf ? 'white' : 'inherit', textDecoration: isPaid ? 'line-through' : 'none' }}>{b.company}</td>
-                  <td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: isHalf ? 'white' : (isPaid ? C.green : '#c0392b'), textDecoration: isPaid ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td>
-                  <td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} onChange={() => setPaidBills(prev => { const next = {...prev}; if (isPaid) delete next[pk]; else next[pk] = true; return next; })} style={{ accentColor: isHalf ? 'white' : C.green, width: 16, height: 16, cursor: 'pointer' }} /></td>
+                <tr key={b.id} style={{ borderBottom: `1px solid ${C.cream}`, opacity: rowOpacity, background: rowBg }}>
+                  <td style={{ padding: '6px 7px', color: textOnHalf ? 'white' : C.charcoalLight, textDecoration: lineThrough ? 'line-through' : 'none' }}>{fmtD(getActualDueDate(b.dateDue, p.start, p.end))}</td>
+                  <td style={{ padding: '6px 7px', fontWeight: isHalf ? 700 : 600, color: textOnHalf ? 'white' : 'inherit', textDecoration: lineThrough ? 'line-through' : 'none' }}>{b.company}</td>
+                  <td style={{ padding: '6px 7px', textAlign: 'right', fontWeight: 700, color: textOnHalf ? 'white' : (isPaid ? C.green : '#c0392b'), textDecoration: lineThrough ? 'line-through' : 'none' }}>{b.halfPayment ? `½ ${fmt(+b.amount/2)}` : fmt(b.amount)}</td>
+                  <td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isSkipped} onChange={toggleSkip} title={isSkipped ? 'Restore this bill to the period' : 'Skip this bill for this paycheck only'} style={{ accentColor: C.slateDark, width: 16, height: 16, cursor: 'pointer' }} /></td>
+                  <td style={{ padding: '6px 7px', textAlign: 'center' }}><input type="checkbox" checked={isPaid} disabled={isSkipped} onChange={togglePaid} style={{ accentColor: textOnHalf ? 'white' : C.green, width: 16, height: 16, cursor: isSkipped ? 'not-allowed' : 'pointer' }} /></td>
                 </tr>
               );
             };
             return (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 10 }}>
-                <thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount', 'Cleared'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : 'left', padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>{['Due', 'Bill', 'Amount', 'Skip', 'Cleared'].map((h, j) => <th key={h} style={{ textAlign: j === 2 ? 'right' : (j >= 3 ? 'center' : 'left'), padding: '5px 7px', color: C.charcoalLight, fontWeight: 700 }}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {halfBills.length > 0 && <tr><td colSpan={4} style={{ padding: '8px 7px 2px', fontSize: 10, fontWeight: 800, color: C.slateDark, letterSpacing: 0.5 }}>½ PAID FIRST</td></tr>}
+                  {halfBills.length > 0 && <tr><td colSpan={5} style={{ padding: '8px 7px 2px', fontSize: 10, fontWeight: 800, color: C.slateDark, letterSpacing: 0.5 }}>½ PAID FIRST</td></tr>}
                   {halfBills.map(b => renderRow(b, true))}
-                  {halfBills.length > 0 && regularBills.length > 0 && <tr><td colSpan={4} style={{ borderBottom: `3px solid ${C.slateDark}`, padding: 0 }}></td></tr>}
+                  {halfBills.length > 0 && regularBills.length > 0 && <tr><td colSpan={5} style={{ borderBottom: `3px solid ${C.slateDark}`, padding: 0 }}></td></tr>}
                   {regularBills.map(b => renderRow(b, false))}
                 </tbody>
               </table>
@@ -496,6 +508,7 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
             const periodKey = p.start.toISOString().slice(0,10);
             const clearedAmt = p.bills.reduce((s, b) => {
               const pk = `${b.id}_${periodKey}`;
+              if (skippedBills[pk]) return s;
               return paidBills[pk] ? s + (b.halfPayment ? (+b.amount||0)/2 : (+b.amount||0)) : s;
             }, 0);
             const unclearedAmt = p.bt - clearedAmt;
@@ -1131,6 +1144,7 @@ export default function App() {
   const [trackerStart, setTrackerStart] = useState('');
   const [paycheckOverrides, setPaycheckOverrides] = useState({});
   const [paidBills, setPaidBills] = useState({});
+  const [skippedBills, setSkippedBills] = useState({});
   const [bankBalance, setBankBalance] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
@@ -1164,6 +1178,7 @@ export default function App() {
             if (d.trackerStart) setTrackerStart(d.trackerStart);
             if (d.paycheckOverrides) setPaycheckOverrides(d.paycheckOverrides);
             if (d.paidBills) setPaidBills(d.paidBills);
+            if (d.skippedBills) setSkippedBills(d.skippedBills);
             if (d.bankBalance !== undefined) setBankBalance(d.bankBalance);
             setDataLoaded(true);
             return;
@@ -1190,12 +1205,13 @@ export default function App() {
   useEffect(() => { sv('tracker', tracker); }, [tracker]);
   useEffect(() => { sv('trackerStart', trackerStart); }, [trackerStart]);
   useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
+  useEffect(() => { sv('skippedBills', skippedBills); }, [skippedBills]);
   useEffect(() => { sv('bankBalance', bankBalance); }, [bankBalance]);
 
   useEffect(() => {
     if (!dataLoaded) return;
-    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, bankBalance });
-  }, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, bankBalance, dataLoaded]);
+    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, skippedBills, bankBalance });
+  }, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
 
   const saveToSupabase = async (data) => {
     try {
@@ -1255,7 +1271,7 @@ export default function App() {
 
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} />}
-        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} bankBalance={bankBalance} setBankBalance={setBankBalance} />}
+        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} skippedBills={skippedBills} setSkippedBills={setSkippedBills} bankBalance={bankBalance} setBankBalance={setBankBalance} />}
         {tab === 'debt'       && <DebtPage bills={bills} setBills={setBills} />}
         {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" />}
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" />}
