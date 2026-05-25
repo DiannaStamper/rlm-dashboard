@@ -423,7 +423,7 @@ function EverythingPage({ bills, setBills, askCoach }) {
 // =====================================================================
 // PAYDAY PAGE
 // =====================================================================
-function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides, paidBills, setPaidBills, skippedBills, setSkippedBills, bankBalance, setBankBalance }) {
+function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGroceryBudgets, paycheckOverrides, setPaycheckOverrides, paidBills, setPaidBills, skippedBills, setSkippedBills, bankBalance, setBankBalance, bumperFund, setBumperFund }) {
   const periods = getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount);
   const pData = periods.map((p, i) => {
   const pb = getBillsForPeriod(bills, p.start, p.end);
@@ -442,11 +442,15 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
       <p style={{ margin: '0 0 14px', color: C.charcoalLight, fontSize: 12 }}>Your next six paychecks, laid out before they arrive. Where income meets obligations.</p>
       <Card>
         <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.green, marginBottom: 10, fontSize: 14 }}>⚙️ Setup</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
           <FI label="How often am I paid?" value={paySettings.frequency} onChange={e => setPaySettings(p => ({ ...p, frequency: e.target.value }))} options={FREQS} />
           <FI label="PAYDAY" value={paySettings.nextDate} onChange={e => setPaySettings(p => ({ ...p, nextDate: e.target.value }))} type="date" />
           <FI label="Paycheck amount ($)" value={paySettings.amount} onChange={e => setPaySettings(p => ({ ...p, amount: e.target.value }))} type="number" placeholder="0.00" />
           <FI label="Current bank balance ($)" value={bankBalance} onChange={e => setBankBalance(e.target.value)} type="number" placeholder="0.00" />
+          <FI label="Bumper Fund ($)" value={bumperFund} onChange={e => setBumperFund(e.target.value)} type="number" placeholder="0.00" />
+        </div>
+        <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic', marginTop: 8, lineHeight: 1.5 }}>
+          The <strong style={{ color: C.green, fontStyle: 'normal' }}>Bumper Fund</strong> is a small cushion you want to keep in the bank — not a full emergency fund, just enough to bump the account away from zero on a hard week.
         </div>
       </Card>
       {periods.length === 0 && <Card style={{ textAlign: 'center', padding: 36, color: C.charcoalLight, fontSize: 13 }}>Enter your pay setup above to see your next six paychecks.</Card>}
@@ -800,7 +804,7 @@ const STARTER_CATEGORIES = [
   { id: 'cat-other',      name: 'Other',      allotment: 0, hidden: false, isStarter: true, locked: true },
 ];
 
-function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, setCategories, cycleStart, setCycleStart, nextPayday, setNextPayday, bills, paySettings, groceryBudgets, bankBalance, paidBills, skippedBills }) {
+function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, setCategories, cycleStart, setCycleStart, nextPayday, setNextPayday, bills, paySettings, groceryBudgets, bankBalance, bumperFund, paidBills, skippedBills }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ ...REAL_ENTRY_EMPTY });
   const [paydayInput, setPaydayInput] = useState('');
@@ -1393,6 +1397,27 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                   about <strong style={{ color: C.charcoal, fontStyle: 'normal' }}>{fmt(dailySafe)}</strong>/day across {daysToNextPaycheck} {dayWord(daysToNextPaycheck)} until next paycheck{paycheckDateLabel ? ` (${paycheckDateLabel})` : ''}
                 </div>
               )}
+              {/* Bumper Fund relationship */}
+              {(() => {
+                const bumper = +bumperFund || 0;
+                if (!bumper) {
+                  return (
+                    <div style={{ fontSize: 11, color: C.sage, fontStyle: 'italic', marginTop: 8 }}>
+                      Set a Bumper Fund on the Payday Page to see your buffer.
+                    </div>
+                  );
+                }
+                const diff = +(safe - bumper).toFixed(2);
+                const above = diff >= 0;
+                return (
+                  <div style={{ fontSize: 12, marginTop: 8, fontStyle: 'italic', color: above ? C.sage : '#b8480a' }}>
+                    {above
+                      ? <><strong style={{ color: C.green, fontStyle: 'normal' }}>{fmt(diff)}</strong> above your <strong style={{ color: C.charcoal, fontStyle: 'normal' }}>{fmt(bumper)}</strong> Bumper Fund</>
+                      : <><strong style={{ color: '#b8480a', fontStyle: 'normal' }}>{fmt(Math.abs(diff))}</strong> below your <strong style={{ color: C.charcoal, fontStyle: 'normal' }}>{fmt(bumper)}</strong> Bumper Fund — flat tire territory</>
+                    }
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ borderTop: `1px solid ${C.cream}`, paddingTop: 10, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, fontSize: 11.5 }}>
               <div style={{ textAlign: 'center' }}>
@@ -2058,6 +2083,7 @@ export default function App() {
   const [paidBills, setPaidBills] = useState({});
   const [skippedBills, setSkippedBills] = useState({});
   const [bankBalance, setBankBalance] = useState('');
+  const [bumperFund, setBumperFund] = useState('');
   const [tab, setTab] = useState('everything');
   const [coach, setCoach] = useState(false);
   const [coachPrefill, setCoachPrefill] = useState('');
@@ -2106,6 +2132,7 @@ export default function App() {
             if (d.paidBills) setPaidBills(d.paidBills);
             if (d.skippedBills) setSkippedBills(d.skippedBills);
             if (d.bankBalance !== undefined) setBankBalance(d.bankBalance);
+            if (d.bumperFund !== undefined) setBumperFund(d.bumperFund);
             setDataLoaded(true);
             return;
           }
@@ -2136,11 +2163,12 @@ export default function App() {
   useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
   useEffect(() => { sv('skippedBills', skippedBills); }, [skippedBills]);
   useEffect(() => { sv('bankBalance', bankBalance); }, [bankBalance]);
+  useEffect(() => { sv('bumperFund', bumperFund); }, [bumperFund]);
 
   useEffect(() => {
     if (!dataLoaded) return;
-    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance });
-  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
+    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, bumperFund });
+  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, bumperFund, dataLoaded]);
 
   const saveToSupabase = async (data) => {
     try {
@@ -2200,13 +2228,13 @@ export default function App() {
 
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '18px 14px 110px' }}>
         {tab === 'everything' && <EverythingPage bills={bills} setBills={setBills} askCoach={askCoach} />}
-        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} skippedBills={skippedBills} setSkippedBills={setSkippedBills} bankBalance={bankBalance} setBankBalance={setBankBalance} />}
+        {tab === 'payday' && <PaydayPage bills={bills} paySettings={pay} setPaySettings={setPay} groceryBudgets={grocery} setGroceryBudgets={setGrocery} paycheckOverrides={paycheckOverrides} setPaycheckOverrides={setPaycheckOverrides} paidBills={paidBills} setPaidBills={setPaidBills} skippedBills={skippedBills} setSkippedBills={setSkippedBills} bankBalance={bankBalance} setBankBalance={setBankBalance} bumperFund={bumperFund} setBumperFund={setBumperFund} />}
         {tab === 'debt'       && <DebtPage bills={bills} setBills={setBills} askCoach={askCoach} />}
         {tab === 'snowball'   && <DebtPlanPage bills={bills} amount={snow} setAmount={setSnow} mode="snowball" askCoach={askCoach} />}
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" askCoach={askCoach} />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} categories={realCategories} setCategories={setRealCategories} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} bills={bills} paySettings={pay} groceryBudgets={grocery} bankBalance={bankBalance} paidBills={paidBills} skippedBills={skippedBills} />}
+        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} categories={realCategories} setCategories={setRealCategories} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} bills={bills} paySettings={pay} groceryBudgets={grocery} bankBalance={bankBalance} bumperFund={bumperFund} paidBills={paidBills} skippedBills={skippedBills} />}
       </div>
 
       <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
