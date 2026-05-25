@@ -1161,6 +1161,24 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
           <div style={{ marginTop: 8, fontSize: 11, color: C.sage, fontStyle: 'italic' }}>Items auto-sorted · tap a name or price to fix it.</div>
         </Card>
 
+        {/* Out-of-cycle warning */}
+        {(() => {
+          if (!parsedReceipt.date || !cycleStart || !nextPayday) return null;
+          const isBefore = parsedReceipt.date < cycleStart;
+          const isAfter = parsedReceipt.date > nextPayday;
+          if (!isBefore && !isAfter) return null;
+          const receiptD = new Date(parsedReceipt.date + 'T00:00:00');
+          const cycleStartFmt = fmtD(new Date(cycleStart + 'T00:00:00'));
+          const nextPayFmt = fmtD(new Date(nextPayday + 'T00:00:00'));
+          return (
+            <Card style={{ background: '#fff3cd', border: `1.5px solid ${C.gold}`, marginBottom: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 12.5, color: C.espresso, lineHeight: 1.5 }}>
+                <strong style={{ fontFamily: 'Georgia,serif' }}>Heads up —</strong> this receipt is dated <strong>{fmtD(receiptD)}</strong>, which is {isBefore ? 'before' : 'after'} your current paycheck cycle ({cycleStartFmt} – {nextPayFmt}). It will save, but it won't count toward this cycle's total. Adjust the date above if you want it to count.
+              </div>
+            </Card>
+          );
+        })()}
+
         {/* Items list */}
         <Card style={{ padding: '6px 0', marginBottom: 10 }}>
           {parsedReceipt.items.length === 0 ? (
