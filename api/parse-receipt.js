@@ -24,7 +24,18 @@ function verifySession(cookieHeader) {
   } catch { return null; }
 }
 
-const RECEIPT_SYSTEM_PROMPT = `You are a receipt-parsing assistant for Real Life Money. The user uploaded a photo of a store receipt. Your job is to extract structured data so it can be added to their spending tracker — never guess, never invent.
+function buildSystemPrompt(categoryList) {
+  const cats = (categoryList && categoryList.length ? categoryList : [
+    { id: 'cat-groceries', name: 'Groceries' },
+    { id: 'cat-gas', name: 'Gas' },
+    { id: 'cat-dining', name: 'Dining Out' },
+    { id: 'cat-household', name: 'Household' },
+    { id: 'cat-fun', name: 'Fun' },
+    { id: 'cat-other', name: 'Other' },
+  ]);
+  const catLines = cats.map(c => `  - ${c.id} ("${c.name}")`).join('\n');
+
+  return `You are a receipt-parsing assistant for Real Life Money. The user uploaded a photo of a store receipt. Your job is to extract structured data so it can be added to their spending tracker — never guess, never invent.
 
 Respond with ONLY a JSON object. No prose, no markdown code fences, no commentary. The schema is:
 
@@ -35,7 +46,7 @@ Respond with ONLY a JSON object. No prose, no markdown code fences, no commentar
   "total": 87.42,
   "totalConfidence": "confident",
   "items": [
-    { "name": "Whole milk, gallon", "rawText": "GV WHL MLK GAL", "price": 4.29, "confidence": "confident" }
+    { "name": "Whole milk, gallon", "rawText": "GV WHL MLK GAL", "price": 4.29, "confidence": "confident", "category": "cat-groceries", "categoryConfidence": "confident" }
   ],
   "notes": ""
 }
@@ -56,13 +67,30 @@ Field guidance:
     - "confident" if you can read both the item AND its price clearly and decoded the name with high certainty
     - "unsure" if the price is clear but the item name is ambiguous (e.g. abbreviated SKU you cannot decode reliably)
     - "unread" if the item line was too damaged/smudged to decode at all — still include the price if you can see it; use the rawText as the name
+  - category: the id of the best-fitting category from this user's list. Use ONLY ids from the list below — never invent. If nothing fits cleanly, use cat-other.
+  - categoryConfidence: "confident" if the item clearly belongs in that category, "unsure" if it could reasonably belong to multiple categories or you're guessing.
 - notes: brief sentence ONLY if something noteworthy happened (e.g. "Several items at the bottom were too smudged to read"). Otherwise empty string.
+
+CATEGORY LIST (use these ids exactly — never invent new ones):
+${catLines}
+
+Category guidance — examples of typical mapping (apply judgment, not rigid rules):
+- Groceries: food and beverages bought to take home (produce, milk, bread, snacks, frozen, packaged food).
+- Gas: fuel purchases at a gas station, plus convenience-store items bought at one if they're the main spend.
+- Dining Out: restaurant meals, takeout, coffee shops, fast food, prepared deli items eaten on-site.
+- Household: cleaning supplies, paper goods, toiletries, hardware, basic home upkeep, kitchen tools.
+- Fun: entertainment, hobbies, gifts for self/others, decor, clothing, anything bought for enjoyment.
+- Other: anything that doesn't clearly fit above, OR if a custom category fits better.
+
+If a custom category in the list above clearly fits an item, use it. Otherwise pick the closest starter category.
 
 Hard rules:
 - Never invent items. If you can't see it on the receipt, it doesn't exist.
+- Never invent category ids. Use ONLY ids from the list above.
 - Prices must be positive numbers. Discount/coupon lines are not items.
 - If the image isn't a receipt or is unreadable, respond exactly: {"error":"Could not read receipt"}
 - Output JSON only. No code fences. No prose.`;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -75,10 +103,12 @@ export default async function handler(req, res) {
     const session = verifySession(req.headers.cookie);
     if (!session) return res.status(401).json({ error: 'Not authenticated' });
 
-    const { imageData, imageType } = req.body || {};
+    const { imageData, imageType, categories } = req.body || {};
     if (!imageData || !imageType) {
       return res.status(400).json({ error: 'Image required' });
     }
+
+    const systemPrompt = buildSystemPrompt(categories);
 
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -90,7 +120,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 2048,
-        system: RECEIPT_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: [{
           role: 'user',
           content: [

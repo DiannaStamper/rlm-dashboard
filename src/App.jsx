@@ -788,9 +788,19 @@ function SinkingFunds({ funds, setFunds }) {
 // Paycheck-cycle spending tracker. Replaces the legacy 7-Day Tracker.
 // =====================================================================
 const PAY_METHODS = ['Card', 'Cash', 'Debit', 'Venmo/PayPal', 'Other'];
-const REAL_ENTRY_EMPTY = { description: '', method: 'Card', amount: '', notes: '' };
+const REAL_ENTRY_EMPTY = { description: '', method: 'Card', amount: '', notes: '', category: 'cat-other' };
 
-function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, setCycleStart, nextPayday, setNextPayday }) {
+// Starter categories — auto-loaded for every user. "Other" is locked (can't hide/rename).
+const STARTER_CATEGORIES = [
+  { id: 'cat-groceries',  name: 'Groceries',  allotment: 0, hidden: false, isStarter: true },
+  { id: 'cat-gas',        name: 'Gas',        allotment: 0, hidden: false, isStarter: true },
+  { id: 'cat-dining',     name: 'Dining Out', allotment: 0, hidden: false, isStarter: true },
+  { id: 'cat-household',  name: 'Household',  allotment: 0, hidden: false, isStarter: true },
+  { id: 'cat-fun',        name: 'Fun',        allotment: 0, hidden: false, isStarter: true },
+  { id: 'cat-other',      name: 'Other',      allotment: 0, hidden: false, isStarter: true, locked: true },
+];
+
+function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, setCategories, cycleStart, setCycleStart, nextPayday, setNextPayday }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ ...REAL_ENTRY_EMPTY });
   const [paydayInput, setPaydayInput] = useState('');
@@ -802,6 +812,21 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
   const [parseError, setParseError] = useState('');
   const [expandedReceiptId, setExpandedReceiptId] = useState(null);
   const fileRef = useRef(null);
+
+  // View toggle: 'day' | 'category'
+  const [viewMode, setViewMode] = useState('day');
+
+  // Inline edit state for category management
+  const [editingCatId, setEditingCatId] = useState(null);
+  const [catEditValue, setCatEditValue] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  // Defensive: ensure categories prop is an array; default to starters if not
+  const cats = Array.isArray(categories) && categories.length ? categories : STARTER_CATEGORIES;
+  const visibleCats = cats.filter(c => !c.hidden);
+  const catById = id => cats.find(c => c.id === id) || cats.find(c => c.id === 'cat-other') || { id: 'cat-other', name: 'Other' };
+  const catName = id => catById(id).name;
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -954,7 +979,11 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ imageData: base64, imageType: 'image/jpeg' })
+            body: JSON.stringify({
+              imageData: base64,
+              imageType: 'image/jpeg',
+              categories: visibleCats.map(c => ({ id: c.id, name: c.name }))
+            })
           });
           const data = await res.json();
           if (!res.ok || !data.receipt) {
@@ -971,13 +1000,18 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
             total: +r.total || 0,
             totalConfidence: r.totalConfidence || 'confident',
             method: 'Card',
-            items: (r.items || []).map(it => ({
-              id: uid(),
-              name: (it.name || it.rawText || 'Item').toString(),
-              rawText: (it.rawText || '').toString(),
-              price: +it.price || 0,
-              confidence: it.confidence || 'confident'
-            })),
+            items: (r.items || []).map(it => {
+              const catId = it.category && cats.find(c => c.id === it.category) ? it.category : 'cat-other';
+              return {
+                id: uid(),
+                name: (it.name || it.rawText || 'Item').toString(),
+                rawText: (it.rawText || '').toString(),
+                price: +it.price || 0,
+                confidence: it.confidence || 'confident',
+                category: catId,
+                categoryConfidence: it.categoryConfidence || 'confident'
+              };
+            }),
             notes: r.notes || ''
           };
           setParsedReceipt(normalized);
@@ -1001,7 +1035,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
   const removeItem = id => setParsedReceipt(p => ({ ...p, items: p.items.filter(it => it.id !== id) }));
   const addBlankItem = () => setParsedReceipt(p => ({
     ...p,
-    items: [...p.items, { id: uid(), name: '', rawText: '', price: 0, confidence: 'confident' }]
+    items: [...p.items, { id: uid(), name: '', rawText: '', price: 0, confidence: 'confident', category: 'cat-other', categoryConfidence: 'confident' }]
   }));
   const commitReceipt = () => {
     if (!parsedReceipt) return;
@@ -1100,34 +1134,65 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
         <Card style={{ padding: '6px 0', marginBottom: 10 }}>
           {parsedReceipt.items.length === 0 ? (
             <div style={{ padding: '14px', textAlign: 'center', color: C.charcoalLight, fontStyle: 'italic', fontSize: 12 }}>No items parsed. Tap "Add a line" below.</div>
-          ) : parsedReceipt.items.map((it, i) => (
-            <div key={it.id} style={{ padding: '10px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.cream}` }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 28px', gap: 8, alignItems: 'center' }}>
-                <input
-                  value={it.name}
-                  onChange={e => updateItem(it.id, 'name', e.target.value)}
-                  placeholder="Item name"
-                  style={{ width: '100%', border: `1px solid ${C.cream}`, borderRadius: 5, padding: '5px 8px', fontFamily: 'inherit', fontSize: 13, color: C.charcoal, background: 'white' }}
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  value={it.price}
-                  onChange={e => updateItem(it.id, 'price', +e.target.value || 0)}
-                  style={{ width: '100%', textAlign: 'right', border: `1px solid ${C.cream}`, borderRadius: 5, padding: '5px 8px', fontFamily: 'inherit', fontSize: 13, color: C.espresso, fontWeight: 600, background: 'white' }}
-                />
-                <button onClick={() => removeItem(it.id)} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 14 }}>✕</button>
-              </div>
-              {it.confidence === 'unsure' && (
-                <div style={{ marginTop: 4, fontSize: 10.5, color: '#7a5e1d', fontStyle: 'italic' }}>? Not sure I read this right — please check.</div>
-              )}
-              {it.confidence === 'unread' && (
-                <div style={{ marginTop: 4, fontSize: 10.5, color: C.charcoalLight, fontStyle: 'italic' }}>
-                  Couldn't read this line clearly. Receipt said: <span style={{ fontFamily: 'monospace' }}>{it.rawText || '—'}</span>
+          ) : parsedReceipt.items.map((it, i) => {
+            const catUnsure = it.categoryConfidence === 'unsure';
+            return (
+              <div key={it.id} style={{ padding: '10px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.cream}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 28px', gap: 8, alignItems: 'center' }}>
+                  <input
+                    value={it.name}
+                    onChange={e => updateItem(it.id, 'name', e.target.value)}
+                    placeholder="Item name"
+                    style={{ width: '100%', border: `1px solid ${C.cream}`, borderRadius: 5, padding: '5px 8px', fontFamily: 'inherit', fontSize: 13, color: C.charcoal, background: 'white' }}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={it.price}
+                    onChange={e => updateItem(it.id, 'price', +e.target.value || 0)}
+                    style={{ width: '100%', textAlign: 'right', border: `1px solid ${C.cream}`, borderRadius: 5, padding: '5px 8px', fontFamily: 'inherit', fontSize: 13, color: C.espresso, fontWeight: 600, background: 'white' }}
+                  />
+                  <button onClick={() => removeItem(it.id)} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 14 }}>✕</button>
                 </div>
-              )}
-            </div>
-          ))}
+                <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <select
+                    value={it.category || 'cat-other'}
+                    onChange={e => updateItem(it.id, 'category', e.target.value)}
+                    style={{
+                      border: `1px solid ${catUnsure ? '#f0e0a8' : C.creamDark}`,
+                      borderRadius: 999,
+                      padding: '3px 24px 3px 10px',
+                      fontFamily: 'inherit',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: catUnsure ? '#fef9e7' : C.cream,
+                      color: catUnsure ? '#7a5e1d' : C.green,
+                      cursor: 'pointer',
+                      appearance: 'none',
+                      WebkitAppearance: 'none',
+                      MozAppearance: 'none',
+                      backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='${encodeURIComponent(catUnsure ? '#7a5e1d' : '#7A8B75')}' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 8px center',
+                    }}
+                  >
+                    {visibleCats.map(c => <option key={c.id} value={c.id}>{catUnsure ? `? ${c.name}` : c.name}</option>)}
+                  </select>
+                  {catUnsure && (
+                    <span style={{ fontSize: 10.5, color: '#7a5e1d', fontStyle: 'italic' }}>not sure — tap to fix</span>
+                  )}
+                </div>
+                {it.confidence === 'unsure' && (
+                  <div style={{ marginTop: 4, fontSize: 10.5, color: '#7a5e1d', fontStyle: 'italic' }}>? Not sure I read this name right — please check.</div>
+                )}
+                {it.confidence === 'unread' && (
+                  <div style={{ marginTop: 4, fontSize: 10.5, color: C.charcoalLight, fontStyle: 'italic' }}>
+                    Couldn't read this line clearly. Receipt said: <span style={{ fontFamily: 'monospace' }}>{it.rawText || '—'}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <div style={{ padding: '8px 14px 4px', textAlign: 'center' }}>
             <button onClick={addBlankItem} style={{ border: 'none', background: 'transparent', color: C.green, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Add a line</button>
           </div>
@@ -1216,7 +1281,27 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
         </div>
       </div>
 
-      {cycleReceipts.length > 0 && (
+      {/* View toggle */}
+      <div style={{ textAlign: 'center', marginBottom: 14 }}>
+        <div style={{ display: 'inline-flex', background: C.cream, padding: 3, borderRadius: 999, border: `1px solid ${C.creamDark}` }}>
+          {[['day', 'By day'], ['category', 'By category']].map(([v, label]) => (
+            <button key={v} onClick={() => setViewMode(v)} style={{
+              border: 'none',
+              background: viewMode === v ? C.green : 'transparent',
+              color: viewMode === v ? 'white' : C.charcoalLight,
+              padding: '5px 16px',
+              borderRadius: 999,
+              fontFamily: 'inherit',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {viewMode === 'day' && cycleReceipts.length > 0 && (
         <>
           <div style={{ textAlign: 'center', fontSize: 10, color: C.sage, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>
             Scanned receipts
@@ -1264,6 +1349,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
         </>
       )}
 
+      {viewMode === 'day' && (
       <Card style={{ marginBottom: 14 }}>
         {!adding ? (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1275,10 +1361,20 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
           </div>
         ) : (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 7 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 7 }}>
               <FI label="What I Bought / Where" value={form.description} onChange={e => setF('description', e.target.value)} placeholder="e.g. Target, coffee" />
               <FI label="Card / Cash" value={form.method} onChange={e => setF('method', e.target.value)} options={PAY_METHODS} />
               <FI label="Amount ($)" value={form.amount} onChange={e => setF('amount', e.target.value)} type="number" placeholder="0.00" />
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ display: 'block', fontSize: 10, color: C.charcoalLight, marginBottom: 2, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .3 }}>Category</label>
+                <select
+                  value={form.category || 'cat-other'}
+                  onChange={e => setF('category', e.target.value)}
+                  style={{ width: '100%', padding: '7px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C', outline: 'none' }}
+                >
+                  {visibleCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
               <FI label="Notes" value={form.notes} onChange={e => setF('notes', e.target.value)} placeholder="Optional" />
             </div>
             <div style={{ display: 'flex', gap: 7, marginTop: 8 }}>
@@ -1288,8 +1384,9 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
           </div>
         )}
       </Card>
+      )}
 
-      {sortedDates.length === 0 && cycleReceipts.length === 0 ? (
+      {viewMode === 'day' && (sortedDates.length === 0 && cycleReceipts.length === 0 ? (
         <Card><div style={{ textAlign: 'center', color: C.charcoalLight, fontStyle: 'italic', padding: '14px 0', fontSize: 13 }}>Nothing logged in this cycle yet.</div></Card>
       ) : sortedDates.length === 0 ? null : (
         sortedDates.map(ds => {
@@ -1326,7 +1423,203 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, s
             </Card>
           );
         })
-      )}
+      ))}
+
+      {viewMode === 'category' && (() => {
+        // Aggregate spend per category
+        const spend = {};
+        cats.forEach(c => { spend[c.id] = 0; });
+        cycleReceipts.forEach(r => {
+          r.items.forEach(it => {
+            const cid = (it.category && cats.find(c => c.id === it.category)) ? it.category : 'cat-other';
+            spend[cid] = (spend[cid] || 0) + (+it.price || 0);
+          });
+        });
+        cycleEntries.forEach(e => {
+          const cid = (e.category && cats.find(c => c.id === e.category)) ? e.category : 'cat-other';
+          spend[cid] = (spend[cid] || 0) + (+e.amount || 0);
+        });
+
+        const plannedRows = visibleCats.filter(c => (+c.allotment || 0) > 0);
+        const unplannedRows = visibleCats
+          .filter(c => !((+c.allotment || 0) > 0))
+          .map(c => ({ ...c, spent: spend[c.id] || 0 }))
+          .filter(c => c.spent > 0);
+        const unplannedTotal = unplannedRows.reduce((s, c) => s + c.spent, 0);
+        const hasAnyActivity = plannedRows.length > 0 || unplannedTotal > 0;
+
+        const dayWordLocal = n => n === 1 ? 'day' : 'days';
+
+        return (
+          <div>
+            <div style={{ textAlign: 'center', fontSize: 10, color: C.sage, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 14 }}>
+              Cycle of {fmtD(cycleStartD)}<span style={{ color: C.sageLight, margin: '0 8px' }}>·</span>{daysToPayday} {dayWordLocal(daysToPayday)} left
+            </div>
+
+            {plannedRows.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8, padding: '0 4px' }}>
+                  <span style={{ fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.sage, fontWeight: 600 }}>Planned</span>
+                  <span style={{ fontStyle: 'italic', fontSize: 11.5, color: C.sageLight }}>what you allotted</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 18 }}>
+                  {plannedRows.map(c => {
+                    const spent = spend[c.id] || 0;
+                    const allotment = +c.allotment || 0;
+                    const pct = Math.min(100, allotment > 0 ? (spent / allotment) * 100 : 0);
+                    const over = spent > allotment;
+                    const remaining = allotment - spent;
+                    const isEditing = editingCatId === c.id;
+                    return (
+                      <Card key={c.id}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                            <div style={{ flex: '1 1 140px', fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 15, color: C.charcoal }}>{c.name}</div>
+                            <span style={{ color: C.charcoalLight, fontSize: 11.5 }}>Allotment $</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={catEditValue}
+                              onChange={e => setCatEditValue(e.target.value)}
+                              autoFocus
+                              style={{ width: 90, padding: '5px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C', outline: 'none' }}
+                            />
+                            <Btn small onClick={() => {
+                              setCategories(xs => xs.map(x => x.id === c.id ? { ...x, allotment: +catEditValue || 0 } : x));
+                              setEditingCatId(null);
+                              setCatEditValue('');
+                            }}>Save</Btn>
+                            <Btn small variant="ghostDark" onClick={() => { setEditingCatId(null); setCatEditValue(''); }}>Cancel</Btn>
+                            {!c.locked && (
+                              <button onClick={() => {
+                                setCategories(xs => xs.map(x => x.id === c.id ? { ...x, hidden: true, allotment: 0 } : x));
+                                setEditingCatId(null);
+                              }} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>hide category</button>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                              <div style={{ fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 15, color: C.charcoal }}>{c.name}</div>
+                              <div style={{ fontFamily: 'Georgia,serif', fontSize: 13.5, color: C.charcoalLight }}>
+                                <span style={{ color: over ? '#b8480a' : C.green, fontWeight: 700 }}>{fmt(spent)}</span> of {fmt(allotment)}
+                              </div>
+                            </div>
+                            <div style={{ marginTop: 9, height: 6, background: C.cream, borderRadius: 999, overflow: 'hidden', border: `1px solid ${C.creamDark}` }}>
+                              <div style={{ width: `${pct}%`, height: '100%', background: over ? '#b8480a' : C.green, transition: 'width 0.2s' }}></div>
+                            </div>
+                            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <button onClick={() => { setEditingCatId(c.id); setCatEditValue(allotment.toString()); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>edit</button>
+                              <div style={{ fontFamily: 'Lora,Georgia,serif', fontStyle: 'italic', color: over ? '#b8480a' : C.sage, fontSize: 11.5 }}>{over ? `${fmt(Math.abs(remaining))} over` : `${fmt(remaining)} left`}</div>
+                            </div>
+                          </>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {unplannedRows.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8, padding: '0 4px' }}>
+                  <span style={{ fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.sage, fontWeight: 600 }}>Unplanned</span>
+                  <span style={{ fontStyle: 'italic', fontSize: 11.5, color: C.sageLight }}>where money went that wasn't in the plan</span>
+                </div>
+                <Card style={{ padding: 0, marginBottom: 10 }}>
+                  {unplannedRows.map((c, i) => (
+                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.cream}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13.5, color: C.charcoal }}>{c.name}</span>
+                        <button onClick={() => { setEditingCatId(c.id); setCatEditValue(''); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 10.5, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>set a plan</button>
+                      </div>
+                      <div style={{ fontFamily: 'Georgia,serif', fontSize: 14, color: C.charcoalLight, fontWeight: 700 }}>{fmt(c.spent)}</div>
+                    </div>
+                  ))}
+                </Card>
+                <div style={{ textAlign: 'center', fontSize: 12, color: C.sage, fontStyle: 'italic', marginBottom: 18 }}>
+                  <strong style={{ color: C.charcoal, fontWeight: 600, fontStyle: 'normal' }}>{fmt(unplannedTotal)}</strong> in unplanned this cycle
+                </div>
+              </>
+            )}
+
+            {/* Inline allotment editor for unplanned categories (when set-a-plan clicked) */}
+            {editingCatId && !plannedRows.some(p => p.id === editingCatId) && (
+              <Card style={{ marginBottom: 14, background: C.cream }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <div style={{ flex: '1 1 140px', fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 15, color: C.charcoal }}>{catName(editingCatId)}</div>
+                  <span style={{ color: C.charcoalLight, fontSize: 11.5 }}>Allotment $</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={catEditValue}
+                    onChange={e => setCatEditValue(e.target.value)}
+                    autoFocus
+                    placeholder="0.00"
+                    style={{ width: 90, padding: '5px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C', outline: 'none' }}
+                  />
+                  <Btn small onClick={() => {
+                    const targetId = editingCatId;
+                    setCategories(xs => xs.map(x => x.id === targetId ? { ...x, allotment: +catEditValue || 0 } : x));
+                    setEditingCatId(null);
+                    setCatEditValue('');
+                  }}>Save plan</Btn>
+                  <Btn small variant="ghostDark" onClick={() => { setEditingCatId(null); setCatEditValue(''); }}>Cancel</Btn>
+                </div>
+              </Card>
+            )}
+
+            {!hasAnyActivity && (
+              <Card style={{ textAlign: 'center', padding: 28, marginBottom: 14 }}>
+                <div style={{ fontFamily: 'Georgia,serif', color: C.green, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Nothing tracked in this cycle yet</div>
+                <p style={{ color: C.charcoalLight, fontSize: 13, margin: '0 auto 4px', maxWidth: 380, lineHeight: 1.5 }}>Scan a receipt or log a purchase and the money will show up here, sorted into categories.</p>
+              </Card>
+            )}
+
+            {/* Add a category */}
+            {addingCategory ? (
+              <Card>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <input
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                    placeholder="e.g. Pet care"
+                    autoFocus
+                    style={{ flex: '1 1 160px', padding: '7px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C', outline: 'none' }}
+                  />
+                  <Btn small onClick={() => {
+                    const trimmed = newCategoryName.trim();
+                    if (!trimmed) return;
+                    setCategories(xs => [...xs, { id: `custom-${uid()}`, name: trimmed, allotment: 0, hidden: false, isStarter: false }]);
+                    setNewCategoryName('');
+                    setAddingCategory(false);
+                  }}>Add</Btn>
+                  <Btn small variant="ghostDark" onClick={() => { setNewCategoryName(''); setAddingCategory(false); }}>Cancel</Btn>
+                </div>
+              </Card>
+            ) : (
+              <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                <button onClick={() => setAddingCategory(true)} style={{ border: 'none', background: 'transparent', color: C.green, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Add a category</button>
+              </div>
+            )}
+
+            {/* Restore hidden categories */}
+            {cats.some(c => c.hidden) && (
+              <div style={{ textAlign: 'center', marginTop: 4 }}>
+                <button onClick={() => {
+                  const hiddenName = cats.filter(c => c.hidden).map(c => c.name).join(', ');
+                  if (window.confirm(`Restore hidden categories: ${hiddenName}?`)) {
+                    setCategories(xs => xs.map(x => ({ ...x, hidden: false })));
+                  }
+                }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 10.5, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>
+                  Show hidden categories ({cats.filter(c => c.hidden).length})
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div style={{ textAlign: 'center', marginTop: 14 }}>
         {!editingPayday ? (
@@ -1539,6 +1832,7 @@ export default function App() {
   const [aval, setAval] = useState('');
   const [realEntries, setRealEntries] = useState([]);
   const [realReceipts, setRealReceipts] = useState([]);
+  const [realCategories, setRealCategories] = useState(STARTER_CATEGORIES);
   const [realCycleStart, setRealCycleStart] = useState('');
   const [realNextPayday, setRealNextPayday] = useState('');
   const [paycheckOverrides, setPaycheckOverrides] = useState({});
@@ -1579,6 +1873,7 @@ export default function App() {
             if (d.realEntries) setRealEntries(d.realEntries);
             else if (d.tracker) setRealEntries(d.tracker);
             if (d.realReceipts) setRealReceipts(d.realReceipts);
+            if (d.realCategories && Array.isArray(d.realCategories) && d.realCategories.length) setRealCategories(d.realCategories);
             if (d.realCycleStart) setRealCycleStart(d.realCycleStart);
             else if (d.trackerStart) setRealCycleStart(d.trackerStart);
             if (d.realNextPayday) setRealNextPayday(d.realNextPayday);
@@ -1597,7 +1892,7 @@ export default function App() {
           }
         }
       } catch {}
-      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['realEntries', setRealEntries], ['realReceipts', setRealReceipts], ['realCycleStart', setRealCycleStart], ['realNextPayday', setRealNextPayday]];
+      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['realEntries', setRealEntries], ['realReceipts', setRealReceipts], ['realCategories', setRealCategories], ['realCycleStart', setRealCycleStart], ['realNextPayday', setRealNextPayday]];
       for (const [k, set] of keys) {
         try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
       }
@@ -1616,6 +1911,7 @@ export default function App() {
   useEffect(() => { sv('aval', aval); }, [aval]);
   useEffect(() => { sv('realEntries', realEntries); }, [realEntries]);
   useEffect(() => { sv('realReceipts', realReceipts); }, [realReceipts]);
+  useEffect(() => { sv('realCategories', realCategories); }, [realCategories]);
   useEffect(() => { sv('realCycleStart', realCycleStart); }, [realCycleStart]);
   useEffect(() => { sv('realNextPayday', realNextPayday); }, [realNextPayday]);
   useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
@@ -1624,8 +1920,8 @@ export default function App() {
 
   useEffect(() => {
     if (!dataLoaded) return;
-    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance });
-  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
+    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance });
+  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
 
   const saveToSupabase = async (data) => {
     try {
@@ -1691,7 +1987,7 @@ export default function App() {
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" askCoach={askCoach} />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} />}
+        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} categories={realCategories} setCategories={setRealCategories} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} />}
       </div>
 
       <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
