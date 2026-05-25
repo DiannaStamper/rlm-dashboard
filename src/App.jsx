@@ -1332,26 +1332,26 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
           );
         }
 
-        // Find the active paycheck period whose window covers today (for paid/skipped lookup)
-        const periods = paySettings && paySettings.nextDate && paySettings.amount
-          ? getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount)
-          : [];
-        const activePeriod = periods.find(p => today >= p.start && today <= p.end) || periods[0];
-
+        // Scan all bills directly against the cycle window [today, nextPaydayD].
+        // We deliberately don't use getPeriods() here because its periods START at
+        // paySettings.nextDate (the next paycheck), so bills due BEFORE the next
+        // paycheck (the ones that actually drain the current cycle's bank balance)
+        // wouldn't fall in any of those future periods.
         let billsUnpaidBeforePayday = 0;
         let billsHasContext = false;
         let billsCount = 0;
-        if (activePeriod && bills && bills.length) {
-          const periodBills = getBillsForPeriod(bills, activePeriod.start, activePeriod.end);
-          const periodKey = activePeriod.start.toISOString().slice(0, 10);
-          for (const b of periodBills) {
-            const pk = `${b.id}_${periodKey}`;
-            if (skippedBills && skippedBills[pk]) continue;
-            if (paidBills && paidBills[pk]) continue;
-            // Only count bills whose due date is still ahead of today, within the cycle
-            const dueD = getActualDueDate(b.dateDue, activePeriod.start, activePeriod.end);
-            if (dueD < today) continue;
-            if (dueD > nextPaydayD) continue;
+        if (bills && bills.length) {
+          for (const b of bills) {
+            if (b.status === 'Zero Balance' || !b.dateDue || !b.amount) continue;
+            // Find the next occurrence of this bill's day-of-month between today and nextPaydayD.
+            const day = +b.dateDue;
+            if (!day || day < 1 || day > 31) continue;
+            // Try this month first; if the day has already passed, try next month.
+            let candidate = new Date(today.getFullYear(), today.getMonth(), day);
+            if (candidate < today) {
+              candidate = new Date(today.getFullYear(), today.getMonth() + 1, day);
+            }
+            if (candidate < today || candidate > nextPaydayD) continue;
             const amt = b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0);
             billsUnpaidBeforePayday += amt;
             billsCount += 1;
