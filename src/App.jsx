@@ -61,7 +61,7 @@ SNOWBALL — debt payoff plan sorted smallest balance first. Fast wins. Big moti
 AVALANCHE — debt payoff plan sorted highest interest rate first. Mathematically the cheapest path.
 GOALS — pick one thing to work toward. The math builds itself.
 SINKING FUNDS — named savings buckets for big expenses you know are coming.
-7-DAY TRACKER — log every purchase for seven days. No judgment. No changes. Just look.
+THE REAL PAGE — see what is really happening between paychecks. Scan a receipt or log a purchase. The running total shows what has been spent this cycle and how many days until the next paycheck lands. No judgment. Just clarity.
 
 NOT A DIET
 
@@ -154,7 +154,7 @@ TAB GREETINGS (match to current tab):
 - Snowball / Avalanche: warm curiosity about the plan
 - Goals: warm curiosity about what they are working toward
 - Sinking Funds: warm curiosity about what is coming up
-- 7-Day Tracker: warm curiosity about what they are noticing this week
+- The Real Page: warm curiosity about what they are noticing this cycle
 `.trim();
 
 // =====================================================================
@@ -193,7 +193,7 @@ const TAB_GREETINGS = {
   avalanche:  name => `Hi ${name} — you're looking at your payoff plan. Want to talk through it?`,
   goals:      name => `Hi ${name} — you're on your goals page. What are you working toward?`,
   funds:      name => `Hi ${name} — you're building your funds. What's coming up?`,
-  tracker:    name => `Hi ${name} — you're tracking your week. What are you noticing?`,
+  real:       name => `Hi ${name} — you're on The Real Page. What are you noticing this cycle?`,
 };
 
 const TAB_LABELS = {
@@ -204,7 +204,7 @@ const TAB_LABELS = {
   avalanche:  'Avalanche',
   goals:      'Goals',
   funds:      'Sinking Funds',
-  tracker:    '7-Day Tracker',
+  real:       'The Real Page',
 };
 
 function getPeriods(freq, startStr, amt) {
@@ -784,208 +784,230 @@ function SinkingFunds({ funds, setFunds }) {
 }
 
 // =====================================================================
-// 7-DAY SPENDING TRACKER
+// THE REAL PAGE
+// Paycheck-cycle spending tracker. Replaces the legacy 7-Day Tracker.
 // =====================================================================
-const DAY_THEMES = [
-  { name: 'Wake-Up Day',     prompt: 'Where did my money go today?' },
-  { name: 'The Trigger',     prompt: 'What was I feeling right before I spent?' },
-  { name: 'The Pattern',     prompt: 'Do I see a pattern forming?' },
-  { name: 'The Why',         prompt: 'Why did I really buy that?' },
-  { name: 'The Feeling',     prompt: 'How do I feel about this week so far?' },
-  { name: 'The Reflection',  prompt: 'What will I do differently next week?' },
-  { name: 'The Big Picture', prompt: 'What surprised me most?' },
-];
-
 const PAY_METHODS = ['Card', 'Cash', 'Debit', 'Venmo/PayPal', 'Other'];
-const TRACKER_EMPTY = { description: '', method: 'Card', amount: '', notes: '' };
+const REAL_ENTRY_EMPTY = { description: '', method: 'Card', amount: '', notes: '' };
 
-function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
-  const [adding, setAdding] = useState(null);
-  const [form, setForm] = useState({ ...TRACKER_EMPTY });
-  const [guess, setGuess] = useState('');
-  const [confirmReset, setConfirmReset] = useState(false);
+function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayday, setNextPayday }) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ ...REAL_ENTRY_EMPTY });
+  const [paydayInput, setPaydayInput] = useState('');
+  const [editingPayday, setEditingPayday] = useState(false);
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayStr = todayISO();
 
-  const days = startDate ? Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(startDate + 'T00:00:00');
-    d.setDate(d.getDate() + i);
-    return d;
-  }) : [];
-
-  const dayStr = d => {
-    const yr = d.getFullYear();
-    const mo = String(d.getMonth() + 1).padStart(2, '0');
-    const dy = String(d.getDate()).padStart(2, '0');
-    return `${yr}-${mo}-${dy}`;
-  };
-  const dayLabel = d => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-  const allEntries = startDate ? entries.filter(e => {
-    const d = new Date(e.date + 'T00:00:00');
-    const start = new Date(startDate + 'T00:00:00');
-    const end = new Date(startDate + 'T00:00:00');
-    end.setDate(end.getDate() + 6);
-    return d >= start && d <= end;
-  }) : [];
-
-  const total7 = allEntries.reduce((s, e) => s + (+e.amount || 0), 0);
-
-  const journeyComplete = startDate ? (() => {
-    const end = new Date(startDate + 'T00:00:00');
-    end.setDate(end.getDate() + 7);
-    return today >= end;
-  })() : false;
-
-  const save = (dateStr) => {
-    if (!form.amount || !form.description) return;
-    setEntries(e => [...e, { ...form, id: uid(), date: dateStr, amount: +form.amount }]);
-    setForm({ ...TRACKER_EMPTY });
-    setAdding(null);
-  };
-
-  const del = id => setEntries(e => e.filter(x => x.id !== id));
-
-  const handleReset = () => {
-    setEntries([]);
-    setStartDate('');
-    setConfirmReset(false);
-    setGuess('');
-  };
-
-  if (!startDate) {
+  // SETUP — no cycle yet
+  if (!cycleStart || !nextPayday) {
+    const startCycle = () => {
+      if (!paydayInput) return;
+      setCycleStart(todayStr);
+      setNextPayday(paydayInput);
+      setPaydayInput('');
+    };
     return (
       <div>
         <div style={{ marginBottom: 16 }}>
-          <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>7-Day Money Discovery Tracker</h2>
-          <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>For the next seven days, write down every purchase you make. No judgment. No changes. Just look.</p>
+          <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>The Real Page</h2>
+          <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>See what's really happening.</p>
         </div>
-        <Card style={{ textAlign: 'center', padding: 48 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
-          <h3 style={{ color: C.green, fontFamily: 'Georgia,serif', margin: '0 0 10px', fontSize: 20 }}>Before You Begin</h3>
-          <p style={{ color: C.charcoalLight, maxWidth: 400, margin: '0 auto 22px', lineHeight: 1.7, fontSize: 13 }}>
-            This is your seven-day discovery. You are not changing anything yet. You are just looking.<br />
-            Write down every purchase — big, small, the coffee, the Target run, all of it. No judgment here.
+        <Card style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>🌱</div>
+          <h3 style={{ color: C.green, fontFamily: 'Georgia,serif', margin: '0 0 10px', fontSize: 18 }}>Set up your paycheck cycle</h3>
+          <p style={{ color: C.charcoalLight, maxWidth: 420, margin: '0 auto 20px', lineHeight: 1.6, fontSize: 13 }}>
+            The Real Page runs paycheck to paycheck. Tell me when your next paycheck lands and I will track what happens between now and then.
           </p>
-          <div style={{ maxWidth: 300, margin: '0 auto 24px', textAlign: 'left' }}>
-            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 5 }}>My best guess — weekly spending total</div>
+          <div style={{ maxWidth: 280, margin: '0 auto 18px', textAlign: 'left' }}>
+            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 5 }}>Next paycheck date</div>
             <input
-              type="number"
-              value={guess}
-              onChange={e => setGuess(e.target.value)}
+              type="date"
+              value={paydayInput}
+              min={todayStr}
+              onChange={e => setPaydayInput(e.target.value)}
               onKeyDown={focusNextOnEnter}
-              placeholder="$0.00"
               style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 14, background: 'white', boxSizing: 'border-box', color: '#2C2C2C' }}
             />
           </div>
-          <Btn onClick={() => setStartDate(todayISO())} style={{ fontSize: 15, padding: '12px 28px' }}>
-            Start My 7-Day Journey
+          <Btn onClick={startCycle} disabled={!paydayInput} style={{ fontSize: 15, padding: '12px 28px' }}>
+            Start tracking this cycle
           </Btn>
-          <p style={{ color: C.charcoalLight, fontSize: 11, marginTop: 14 }}>Today becomes Day 1. Each day unlocks as it arrives.</p>
+          <p style={{ color: C.charcoalLight, fontSize: 11, marginTop: 14, fontStyle: 'italic' }}>
+            Today becomes day 1. The cycle resets when payday arrives.
+          </p>
         </Card>
       </div>
     );
   }
 
+  // Cycle math
+  const cycleStartD = new Date(cycleStart + 'T00:00:00');
+  const nextPaydayD = new Date(nextPayday + 'T00:00:00');
+  const dayOfCycle = Math.max(1, Math.floor((today - cycleStartD) / 86400000) + 1);
+  const daysToPayday = Math.max(0, Math.ceil((nextPaydayD - today) / 86400000));
+
+  const cycleEntries = entries.filter(e => {
+    const d = new Date(e.date + 'T00:00:00');
+    return d >= cycleStartD && d <= nextPaydayD;
+  });
+  const cycleTotal = cycleEntries.reduce((s, e) => s + (+e.amount || 0), 0);
+
+  // PAST PAYDAY — prompt new cycle
+  if (today > nextPaydayD) {
+    const startNew = () => {
+      if (!paydayInput) return;
+      setCycleStart(todayStr);
+      setNextPayday(paydayInput);
+      setPaydayInput('');
+    };
+    return (
+      <div>
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>The Real Page</h2>
+          <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>See what's really happening.</p>
+        </div>
+        <Card style={{ background: C.creamDark, marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.espresso, marginBottom: 8, fontSize: 16 }}>That cycle has ended.</div>
+          <p style={{ fontSize: 13, color: C.charcoalLight, margin: '0 0 6px' }}>
+            Your last cycle ran from {fmtD(cycleStartD)} through {fmtD(nextPaydayD)}. You spent <strong style={{ color: C.espresso }}>{fmt(cycleTotal)}</strong>.
+          </p>
+          <p style={{ fontSize: 12, color: C.charcoalLight, margin: 0, fontStyle: 'italic' }}>
+            The looking is never as bad as the not knowing.
+          </p>
+        </Card>
+        <Card style={{ textAlign: 'center', padding: 30 }}>
+          <h3 style={{ color: C.green, fontFamily: 'Georgia,serif', margin: '0 0 8px', fontSize: 17 }}>Start your next cycle</h3>
+          <p style={{ color: C.charcoalLight, maxWidth: 420, margin: '0 auto 18px', lineHeight: 1.6, fontSize: 13 }}>
+            When does your next paycheck land?
+          </p>
+          <div style={{ maxWidth: 280, margin: '0 auto 16px', textAlign: 'left' }}>
+            <div style={{ fontSize: 10, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 5 }}>Next paycheck date</div>
+            <input
+              type="date"
+              value={paydayInput}
+              min={todayStr}
+              onChange={e => setPaydayInput(e.target.value)}
+              onKeyDown={focusNextOnEnter}
+              style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 14, background: 'white', boxSizing: 'border-box', color: '#2C2C2C' }}
+            />
+          </div>
+          <Btn onClick={startNew} disabled={!paydayInput} style={{ fontSize: 15, padding: '12px 28px' }}>
+            Start a new cycle
+          </Btn>
+        </Card>
+      </div>
+    );
+  }
+
+  // ACTIVE CYCLE
+  const save = () => {
+    if (!form.amount || !form.description) return;
+    setEntries(es => [...es, { ...form, id: uid(), date: todayStr, amount: +form.amount }]);
+    setForm({ ...REAL_ENTRY_EMPTY });
+    setAdding(false);
+  };
+  const del = id => setEntries(es => es.filter(x => x.id !== id));
+
+  const savePaydayUpdate = () => {
+    if (!paydayInput) { setEditingPayday(false); return; }
+    setNextPayday(paydayInput);
+    setPaydayInput('');
+    setEditingPayday(false);
+  };
+
+  // Group entries by date, newest first
+  const byDate = {};
+  cycleEntries.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+  const sortedDates = Object.keys(byDate).sort().reverse();
+
+  const dayWord = n => n === 1 ? 'day' : 'days';
+  const paydayWeekday = nextPaydayD.toLocaleDateString('en-US', { weekday: 'long' });
+  const paydayShort = fmtD(nextPaydayD);
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div>
-          <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>7-Day Money Discovery Tracker</h2>
-          <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>
-            Journey started {new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-            {guess ? ` · Best guess: ${fmt(+guess)}` : ''}
-          </p>
-        </div>
-        {journeyComplete && !confirmReset && (
-          <Btn variant="ghostDark" small onClick={() => setConfirmReset(true)}>Start New Journey</Btn>
-        )}
+      <div style={{ marginBottom: 14 }}>
+        <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>The Real Page</h2>
+        <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>See what's really happening.</p>
       </div>
 
-      {confirmReset && (
-        <Card style={{ background: '#fff3cd', border: `1.5px solid ${C.gold}`, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, color: C.espresso, marginBottom: 6 }}>Start a new journey?</div>
-          <p style={{ fontSize: 12, color: C.charcoalLight, margin: '0 0 12px' }}>This will clear your current tracker entries and start fresh from today.</p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Btn small variant="danger" onClick={handleReset}>Yes, start fresh</Btn>
-            <Btn small variant="ghostDark" onClick={() => setConfirmReset(false)}>Cancel</Btn>
-          </div>
-        </Card>
-      )}
+      <Card style={{ textAlign: 'center', padding: '26px 20px 22px', marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: C.sage, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>
+          Day {dayOfCycle}<span style={{ color: C.sageLight, margin: '0 8px' }}>·</span>Paycheck cycle
+        </div>
+        <div style={{ fontFamily: 'Georgia,serif', color: C.green, fontSize: 56, fontWeight: 700, lineHeight: 1, margin: '6px 0 4px' }}>
+          {fmt(cycleTotal)}
+        </div>
+        <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontSize: 16 }}>
+          spent this cycle
+        </div>
+        <div style={{ height: 1, background: C.creamDark, margin: '14px auto 10px', width: '55%' }} />
+        <div style={{ fontSize: 12.5, color: C.sage, fontStyle: 'italic' }}>
+          {daysToPayday === 0
+            ? `Payday lands today (${paydayWeekday})`
+            : `${daysToPayday} ${dayWord(daysToPayday)} until ${paydayWeekday}, ${paydayShort}`}
+        </div>
+      </Card>
 
-      {journeyComplete && !confirmReset && (
-        <Card style={{ background: C.creamDark, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.espresso, marginBottom: 6, fontSize: 15 }}>🎉 You finished your 7-day discovery.</div>
-          <p style={{ fontSize: 12, color: C.charcoalLight, margin: '0 0 4px' }}>
-            Total spent: <strong style={{ color: C.espresso }}>{fmt(total7)}</strong>
-            {guess ? `. Your guess was ${fmt(+guess)} — you came in ${+guess >= total7 ? `${fmt(+guess - total7)} under.` : `${fmt(total7 - +guess)} over.`}` : '.'}
-          </p>
-          <p style={{ fontSize: 12, color: C.charcoalLight, margin: 0 }}>The looking is never as bad as the not knowing. Ready to start another week?</p>
-        </Card>
-      )}
+      <div style={{ textAlign: 'center', marginBottom: 16 }}>
+        <button disabled style={{ background: C.creamDark, color: C.charcoalLight, border: 'none', borderRadius: 999, padding: '13px 26px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          📷 Scan a receipt
+        </button>
+        <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic', marginTop: 6 }}>
+          Coming next. For now, log purchases by hand below.
+        </div>
+      </div>
 
-      {days.map((day, i) => {
-        const ds = dayStr(day);
-        const theme = DAY_THEMES[i];
-        const dayE = allEntries.filter(e => e.date === ds);
-        const dayTotal = dayE.reduce((s, e) => s + (+e.amount || 0), 0);
-        const isToday = ds === todayISO();
-        const isFuture = day > today;
-
-        return (
-          <Card key={ds} style={{ borderLeft: `4px solid ${isToday ? C.gold : isFuture ? C.creamDark : C.green}`, opacity: isFuture ? .42 : 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                  <span style={{ background: isToday ? C.gold : isFuture ? C.creamDark : C.green, color: isFuture ? C.charcoalLight : 'white', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase' }}>Day {i + 1}</span>
-                  <span style={{ fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 14, color: isToday ? C.gold : isFuture ? C.charcoalLight : C.green }}>{theme.name}</span>
-                  {isToday && <span style={{ fontSize: 10, background: C.gold, color: 'white', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>Today</span>}
-                </div>
-                <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic' }}>{dayLabel(day)} · {theme.prompt}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                {dayTotal > 0 && <div style={{ fontWeight: 700, fontSize: 15, color: C.espresso, marginBottom: 4 }}>{fmt(dayTotal)}</div>}
-                {!isFuture && adding !== ds && (
-                  <Btn small variant="ghost" onClick={() => { setForm({ ...TRACKER_EMPTY }); setAdding(ds); }}>+ Add</Btn>
-                )}
-                {isFuture && <div style={{ fontSize: 11, color: C.charcoalLight }}>Unlocks {dayLabel(day)}</div>}
-              </div>
+      <Card style={{ marginBottom: 14 }}>
+        {!adding ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: C.green, fontSize: 15 }}>Log a purchase</div>
+              <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic' }}>What was bought, where, how much.</div>
             </div>
+            <Btn small onClick={() => { setForm({ ...REAL_ENTRY_EMPTY }); setAdding(true); }}>+ Add</Btn>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 7 }}>
+              <FI label="What I Bought / Where" value={form.description} onChange={e => setF('description', e.target.value)} placeholder="e.g. Target, coffee" />
+              <FI label="Card / Cash" value={form.method} onChange={e => setF('method', e.target.value)} options={PAY_METHODS} />
+              <FI label="Amount ($)" value={form.amount} onChange={e => setF('amount', e.target.value)} type="number" placeholder="0.00" />
+              <FI label="Notes" value={form.notes} onChange={e => setF('notes', e.target.value)} placeholder="Optional" />
+            </div>
+            <div style={{ display: 'flex', gap: 7, marginTop: 8 }}>
+              <Btn small onClick={save}>Save</Btn>
+              <Btn small variant="ghostDark" onClick={() => setAdding(false)}>Cancel</Btn>
+            </div>
+          </div>
+        )}
+      </Card>
 
-            {adding === ds && (
-              <div style={{ background: C.cream, borderRadius: 8, padding: 10, marginBottom: 8, border: `1px solid ${C.creamDark}` }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 7 }}>
-                  <FI label="What I Bought / Where" value={form.description} onChange={e => setF('description', e.target.value)} placeholder="e.g. Target, morning coffee" />
-                  <FI label="Card / Cash" value={form.method} onChange={e => setF('method', e.target.value)} options={PAY_METHODS} />
-                  <FI label="Amount ($)" value={form.amount} onChange={e => setF('amount', e.target.value)} type="number" placeholder="0.00" />
-                  <FI label="Notes" value={form.notes} onChange={e => setF('notes', e.target.value)} placeholder="Optional" />
+      {sortedDates.length === 0 ? (
+        <Card><div style={{ textAlign: 'center', color: C.charcoalLight, fontStyle: 'italic', padding: '14px 0', fontSize: 13 }}>Nothing logged in this cycle yet.</div></Card>
+      ) : (
+        sortedDates.map(ds => {
+          const dayE = byDate[ds];
+          const dayTotal = dayE.reduce((s, e) => s + (+e.amount || 0), 0);
+          const d = new Date(ds + 'T00:00:00');
+          const isToday = ds === todayStr;
+          return (
+            <Card key={ds} style={{ borderLeft: `4px solid ${isToday ? C.gold : C.green}`, marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <div style={{ fontWeight: 700, fontFamily: 'Georgia,serif', color: isToday ? C.gold : C.green, fontSize: 14 }}>
+                  {d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                  {isToday && <span style={{ marginLeft: 8, fontSize: 10, background: C.gold, color: 'white', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>Today</span>}
                 </div>
-                <div style={{ display: 'flex', gap: 7, marginTop: 4 }}>
-                  <Btn small onClick={() => save(ds)}>Save</Btn>
-                  <Btn small variant="ghostDark" onClick={() => setAdding(null)}>Cancel</Btn>
-                </div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.espresso }}>{fmt(dayTotal)}</div>
               </div>
-            )}
-
-            {dayE.length === 0 && adding !== ds && !isFuture && (
-              <div style={{ fontSize: 12, color: C.charcoalLight, padding: '2px 0 4px' }}>Nothing logged yet.</div>
-            )}
-
-            {dayE.length > 0 && (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${C.creamDark}` }}>
-                      {['What I Bought / Where', 'Card / Cash', 'Amount', 'Notes', ''].map((h, j) => (
-                        <th key={j} style={{ padding: '5px 7px', textAlign: j === 2 ? 'right' : 'left', color: C.charcoalLight, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
                   <tbody>
                     {dayE.map(e => (
-                      <tr key={e.id} style={{ borderBottom: `1px solid ${C.cream}` }}>
+                      <tr key={e.id} style={{ borderTop: `1px solid ${C.cream}` }}>
                         <td style={{ padding: '6px 7px', fontWeight: 600 }}>{e.description}</td>
                         <td style={{ padding: '6px 7px', color: C.charcoalLight }}>{e.method}</td>
                         <td style={{ padding: '6px 7px', fontWeight: 700, color: C.espresso, textAlign: 'right' }}>{fmt(e.amount)}</td>
@@ -997,29 +1019,31 @@ function SpendingTracker({ entries, setEntries, startDate, setStartDate }) {
                     ))}
                   </tbody>
                 </table>
-                <div style={{ paddingTop: 7, borderTop: `1px solid ${C.creamDark}`, display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                  <span style={{ fontSize: 11, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginRight: 12 }}>Daily Total</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.espresso }}>{fmt(dayTotal)}</span>
-                </div>
               </div>
-            )}
-          </Card>
-        );
-      })}
-
-      {total7 > 0 && (
-        <Card style={{ background: C.green }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ color: 'white', fontWeight: 700, fontFamily: 'Georgia,serif', fontSize: 16 }}>7-Day Grand Total</div>
-            <div style={{ color: 'white', fontWeight: 700, fontSize: 24 }}>{fmt(total7)}</div>
-          </div>
-          {guess && (
-            <div style={{ color: C.sageLight, fontSize: 12, marginTop: 5 }}>
-              Your guess was {fmt(+guess)}. {+guess >= total7 ? `You came in ${fmt(+guess - total7)} under.` : `You came in ${fmt(total7 - +guess)} over.`}
-            </div>
-          )}
-        </Card>
+            </Card>
+          );
+        })
       )}
+
+      <div style={{ textAlign: 'center', marginTop: 14 }}>
+        {!editingPayday ? (
+          <button onClick={() => { setPaydayInput(nextPayday); setEditingPayday(true); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>
+            Update next paycheck date
+          </button>
+        ) : (
+          <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', background: C.cream, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.creamDark}` }}>
+            <input
+              type="date"
+              value={paydayInput}
+              min={todayStr}
+              onChange={e => setPaydayInput(e.target.value)}
+              style={{ padding: '6px 10px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C' }}
+            />
+            <Btn small onClick={savePaydayUpdate}>Save</Btn>
+            <Btn small variant="ghostDark" onClick={() => { setEditingPayday(false); setPaydayInput(''); }}>Cancel</Btn>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1210,8 +1234,9 @@ export default function App() {
   const [goal, setGoal] = useState({ type: 'Pay off a specific debt', which: '', targetDate: '', contribution: '' });
   const [snow, setSnow] = useState('');
   const [aval, setAval] = useState('');
-  const [tracker, setTracker] = useState([]);
-  const [trackerStart, setTrackerStart] = useState('');
+  const [realEntries, setRealEntries] = useState([]);
+  const [realCycleStart, setRealCycleStart] = useState('');
+  const [realNextPayday, setRealNextPayday] = useState('');
   const [paycheckOverrides, setPaycheckOverrides] = useState({});
   const [paidBills, setPaidBills] = useState({});
   const [skippedBills, setSkippedBills] = useState({});
@@ -1246,8 +1271,18 @@ export default function App() {
             if (d.goal) setGoal(d.goal);
             if (d.snow !== undefined) setSnow(d.snow);
             if (d.aval !== undefined) setAval(d.aval);
-            if (d.tracker) setTracker(d.tracker);
-            if (d.trackerStart) setTrackerStart(d.trackerStart);
+            // Migrate legacy 7-Day Tracker → The Real Page on first load if no Real Page data yet
+            if (d.realEntries) setRealEntries(d.realEntries);
+            else if (d.tracker) setRealEntries(d.tracker);
+            if (d.realCycleStart) setRealCycleStart(d.realCycleStart);
+            else if (d.trackerStart) setRealCycleStart(d.trackerStart);
+            if (d.realNextPayday) setRealNextPayday(d.realNextPayday);
+            else if (d.trackerStart) {
+              // Old 7-day cycle: nextPayday = trackerStart + 7 days
+              const sd = new Date(d.trackerStart + 'T00:00:00');
+              sd.setDate(sd.getDate() + 7);
+              setRealNextPayday(`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`);
+            }
             if (d.paycheckOverrides) setPaycheckOverrides(d.paycheckOverrides);
             if (d.paidBills) setPaidBills(d.paidBills);
             if (d.skippedBills) setSkippedBills(d.skippedBills);
@@ -1257,7 +1292,7 @@ export default function App() {
           }
         }
       } catch {}
-      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['tracker', setTracker], ['trackerStart', setTrackerStart]];
+      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['realEntries', setRealEntries], ['realCycleStart', setRealCycleStart], ['realNextPayday', setRealNextPayday]];
       for (const [k, set] of keys) {
         try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
       }
@@ -1274,16 +1309,17 @@ export default function App() {
   useEffect(() => { sv('goal', goal); }, [goal]);
   useEffect(() => { sv('snow', snow); }, [snow]);
   useEffect(() => { sv('aval', aval); }, [aval]);
-  useEffect(() => { sv('tracker', tracker); }, [tracker]);
-  useEffect(() => { sv('trackerStart', trackerStart); }, [trackerStart]);
+  useEffect(() => { sv('realEntries', realEntries); }, [realEntries]);
+  useEffect(() => { sv('realCycleStart', realCycleStart); }, [realCycleStart]);
+  useEffect(() => { sv('realNextPayday', realNextPayday); }, [realNextPayday]);
   useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
   useEffect(() => { sv('skippedBills', skippedBills); }, [skippedBills]);
   useEffect(() => { sv('bankBalance', bankBalance); }, [bankBalance]);
 
   useEffect(() => {
     if (!dataLoaded) return;
-    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, skippedBills, bankBalance });
-  }, [bills, pay, grocery, funds, goal, snow, aval, tracker, trackerStart, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
+    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance });
+  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
 
   const saveToSupabase = async (data) => {
     try {
@@ -1315,12 +1351,12 @@ export default function App() {
   const TABS = [
     { id: 'everything', label: 'Everything Page' },
     { id: 'payday',     label: 'Payday' },
+    { id: 'real',       label: 'The Real Page' },
     { id: 'debt',       label: 'Debt & Credit' },
     { id: 'snowball',   label: 'Snowball' },
     { id: 'avalanche',  label: 'Avalanche' },
     { id: 'goals',      label: 'Goals' },
     { id: 'funds',      label: 'Sinking Funds' },
-    { id: 'tracker',    label: '7-Day Tracker' },
   ];
 
   return (
@@ -1349,7 +1385,7 @@ export default function App() {
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" askCoach={askCoach} />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'tracker'    && <SpendingTracker entries={tracker} setEntries={setTracker} startDate={trackerStart} setStartDate={setTrackerStart} />}
+        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} />}
       </div>
 
       <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
