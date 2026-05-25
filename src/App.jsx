@@ -1842,6 +1842,72 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
               </>
             )}
 
+            {/* Fixed Costs from bills (current cycle only — past cycles can't reliably
+                reconstruct paid/skipped state) */}
+            {!isViewingPast && (() => {
+              const periods = paySettings && paySettings.nextDate && paySettings.amount
+                ? getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount)
+                : [];
+              const activePeriod = periods[0];
+              if (!activePeriod || !bills || !bills.length) return null;
+
+              const periodBills = getBillsForPeriod(bills, activePeriod.start, activePeriod.end);
+              const periodKey = activePeriod.start.toISOString().slice(0, 10);
+
+              // Group by bill.category (the Everything Page taxonomy)
+              const byBillCat = {};
+              let billsTotalCleared = 0;
+              let billsTotalUnpaid = 0;
+              for (const b of periodBills) {
+                const pk = `${b.id}_${periodKey}`;
+                if (skippedBills && skippedBills[pk]) continue;
+                const amt = b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0);
+                const isPaid = !!(paidBills && paidBills[pk]);
+                const cat = b.category || 'Other';
+                if (!byBillCat[cat]) byBillCat[cat] = { name: cat, items: [], total: 0, cleared: 0 };
+                byBillCat[cat].items.push({ ...b, amt, isPaid });
+                byBillCat[cat].total += amt;
+                if (isPaid) {
+                  byBillCat[cat].cleared += amt;
+                  billsTotalCleared += amt;
+                } else {
+                  billsTotalUnpaid += amt;
+                }
+              }
+              const billCatRows = Object.values(byBillCat).sort((a, b) => b.total - a.total);
+              if (billCatRows.length === 0) return null;
+              const billsTotalAll = billsTotalCleared + billsTotalUnpaid;
+
+              return (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8, padding: '0 4px' }}>
+                    <span style={{ fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.sage, fontWeight: 600 }}>Fixed Costs</span>
+                    <span style={{ fontStyle: 'italic', fontSize: 11.5, color: C.sageLight }}>bills due this paycheck period</span>
+                  </div>
+                  <Card style={{ padding: 0, marginBottom: 10 }}>
+                    {billCatRows.map((row, i) => (
+                      <div key={row.name} style={{ padding: '11px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.cream}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <div style={{ fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 14, color: C.charcoal }}>{row.name}</div>
+                          <div style={{ fontFamily: 'Georgia,serif', fontSize: 13.5, color: C.charcoalLight }}>
+                            {row.cleared > 0 && <span style={{ color: C.green, fontWeight: 700, marginRight: 6 }}>{fmt(row.cleared)} paid</span>}
+                            <span style={{ color: row.total - row.cleared > 0 ? '#c0392b' : C.green, fontWeight: 700 }}>{fmt(row.total)}</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.sage, fontStyle: 'italic', marginTop: 2 }}>
+                          {row.items.length} bill{row.items.length === 1 ? '' : 's'}{' · '}{row.items.map(it => it.company).filter(Boolean).slice(0, 3).join(', ')}{row.items.length > 3 ? '…' : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </Card>
+                  <div style={{ textAlign: 'center', fontSize: 12, color: C.sage, fontStyle: 'italic', marginBottom: 18 }}>
+                    <strong style={{ color: C.charcoal, fontWeight: 600, fontStyle: 'normal' }}>{fmt(billsTotalAll)}</strong> in fixed costs this period
+                    {billsTotalCleared > 0 && <> · <strong style={{ color: C.green, fontStyle: 'normal' }}>{fmt(billsTotalCleared)}</strong> already cleared</>}
+                  </div>
+                </>
+              );
+            })()}
+
             {/* Inline allotment editor for unplanned categories (when set-a-plan clicked) */}
             {editingCatId && !plannedRows.some(p => p.id === editingCatId) && (() => {
               const editingCat = cats.find(c => c.id === editingCatId);
