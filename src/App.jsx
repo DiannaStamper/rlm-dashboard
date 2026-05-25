@@ -1999,6 +1999,105 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
         );
       })()}
 
+      {/* Drift / Price / Paycheck diagnostic — names what's actually going on when
+          the numbers look uncomfortable. Current cycle only; only renders when at
+          least one signal fires. */}
+      {!isViewingPast && (() => {
+        // Drift signal: unplanned spending across many small entries
+        const unplannedCatIds = new Set(cats.filter(c => !((+c.allotment || 0) > 0)).map(c => c.id));
+        const unplannedCount = cycleEntries.filter(e => unplannedCatIds.has(e.category || 'cat-other')).length
+          + cycleReceipts.reduce((s, r) => s + r.items.filter(it => unplannedCatIds.has(it.category || 'cat-other')).length, 0);
+        const unplannedSum = cycleEntries
+          .filter(e => unplannedCatIds.has(e.category || 'cat-other'))
+          .reduce((s, e) => s + (+e.amount || 0), 0)
+          + cycleReceipts.reduce((s, r) =>
+              s + r.items.filter(it => unplannedCatIds.has(it.category || 'cat-other'))
+                       .reduce((s2, it) => s2 + (+it.price || 0), 0)
+            , 0);
+        const driftSignal = unplannedCount >= 5 || unplannedSum >= 50;
+
+        // Price signal: any planned category > 110% of its allotment
+        const priceCategories = [];
+        for (const c of cats) {
+          const allotment = +c.allotment || 0;
+          if (allotment <= 0) continue;
+          const spent = cycleEntries.filter(e => (e.category || 'cat-other') === c.id).reduce((s, e) => s + (+e.amount || 0), 0)
+            + cycleReceipts.reduce((s, r) => s + r.items.filter(it => (it.category || 'cat-other') === c.id).reduce((s2, it) => s2 + (+it.price || 0), 0), 0);
+          if (spent > allotment * 1.1) priceCategories.push({ name: c.name, spent, allotment, over: spent - allotment });
+        }
+        const priceSignal = priceCategories.length > 0;
+
+        // Paycheck signal: bills in active paycheck period exceed the paycheck amount
+        const periods2 = paySettings && paySettings.nextDate && paySettings.amount
+          ? getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount)
+          : [];
+        const activePeriod2 = periods2[0];
+        let billsPeriodTotal = 0;
+        let paycheckAmt = +paySettings?.amount || 0;
+        if (activePeriod2 && bills && bills.length) {
+          const periodBills = getBillsForPeriod(bills, activePeriod2.start, activePeriod2.end);
+          const periodKey = activePeriod2.start.toISOString().slice(0, 10);
+          for (const b of periodBills) {
+            const pk = `${b.id}_${periodKey}`;
+            if (skippedBills && skippedBills[pk]) continue;
+            billsPeriodTotal += b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0);
+          }
+        }
+        const paycheckSignal = paycheckAmt > 0 && billsPeriodTotal > paycheckAmt;
+
+        if (!driftSignal && !priceSignal && !paycheckSignal) return null;
+
+        return (
+          <Card style={{ marginTop: 6, marginBottom: 14, background: '#fbf6e9', border: `1px solid ${C.creamDark}`, padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.espresso, fontWeight: 700 }}>Notice this</span>
+              <span style={{ fontStyle: 'italic', fontSize: 11.5, color: C.sage }}>naming what the numbers are showing</span>
+            </div>
+
+            {paycheckSignal && (
+              <div style={{ marginBottom: driftSignal || priceSignal ? 12 : 0 }}>
+                <div style={{ fontFamily: 'Georgia,serif', color: C.espresso, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                  This looks like a <strong style={{ color: '#b8480a' }}>paycheck problem</strong>.
+                </div>
+                <div style={{ fontSize: 12.5, color: C.charcoal, lineHeight: 1.55 }}>
+                  Bills due this paycheck period total <strong>{fmt(billsPeriodTotal)}</strong> against a <strong>{fmt(paycheckAmt)}</strong> paycheck — a gap of <strong style={{ color: '#b8480a' }}>{fmt(billsPeriodTotal - paycheckAmt)}</strong>. That's not a discipline thing. That's the math. A real number is something you can make a plan around.
+                </div>
+              </div>
+            )}
+
+            {priceSignal && (
+              <div style={{ marginBottom: driftSignal ? 12 : 0 }}>
+                <div style={{ fontFamily: 'Georgia,serif', color: C.espresso, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                  {priceCategories.length === 1
+                    ? <>This looks like a <strong style={{ color: '#b8480a' }}>price problem</strong> in {priceCategories[0].name}.</>
+                    : <>This looks like a <strong style={{ color: '#b8480a' }}>price problem</strong> in {priceCategories.length} categories.</>
+                  }
+                </div>
+                <div style={{ fontSize: 12.5, color: C.charcoal, lineHeight: 1.55 }}>
+                  {priceCategories.slice(0, 3).map((p, i) => (
+                    <span key={p.name}>
+                      <strong>{p.name}</strong>: {fmt(p.spent)} against {fmt(p.allotment)} planned ({fmt(p.over)} over){i < Math.min(priceCategories.length, 3) - 1 ? ' · ' : '.'}
+                    </span>
+                  ))}
+                  <div style={{ marginTop: 6, fontStyle: 'italic', color: C.sage }}>Things cost more than they used to. Small shifts — a switch in brand, a swap in store — can sometimes find $20 or $30 without taking a real pleasure away.</div>
+                </div>
+              </div>
+            )}
+
+            {driftSignal && (
+              <div>
+                <div style={{ fontFamily: 'Georgia,serif', color: C.espresso, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                  This looks like a <strong style={{ color: '#b8480a' }}>drift problem</strong>.
+                </div>
+                <div style={{ fontSize: 12.5, color: C.charcoal, lineHeight: 1.55 }}>
+                  <strong>{fmt(unplannedSum)}</strong> across <strong>{unplannedCount}</strong> unplanned {unplannedCount === 1 ? 'purchase' : 'purchases'} this cycle. Small things, but they're adding up. Honest tracking is already half the answer — the Bumper Fund is the other half.
+                </div>
+              </div>
+            )}
+          </Card>
+        );
+      })()}
+
       {!isViewingPast && (
       <div style={{ textAlign: 'center', marginTop: 14 }}>
         {!editingPayday ? (
