@@ -811,6 +811,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
   const [parsedReceipt, setParsedReceipt] = useState(null);
   const [parseError, setParseError] = useState('');
   const [expandedReceiptId, setExpandedReceiptId] = useState(null);
+  const [editingReceiptId, setEditingReceiptId] = useState(null); // when set, confirm view is editing this saved receipt
   const fileRef = useRef(null);
 
   // View toggle: 'day' | 'category'
@@ -819,8 +820,14 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
   // Inline edit state for category management
   const [editingCatId, setEditingCatId] = useState(null);
   const [catEditValue, setCatEditValue] = useState('');
+  const [catEditName, setCatEditName] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+
+  // Inline edit state for manual entries
+  const [editingEntryId, setEditingEntryId] = useState(null);
+  const [entryEditForm, setEntryEditForm] = useState({ ...REAL_ENTRY_EMPTY });
+  const setEF = (k, v) => setEntryEditForm(f => ({ ...f, [k]: v }));
 
   // Defensive: ensure categories prop is an array; default to starters if not
   const cats = Array.isArray(categories) && categories.length ? categories : STARTER_CATEGORIES;
@@ -1039,14 +1046,38 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
   }));
   const commitReceipt = () => {
     if (!parsedReceipt) return;
-    setReceipts(rs => [...(rs || []), { ...parsedReceipt, addedAt: new Date().toISOString() }]);
+    if (editingReceiptId) {
+      setReceipts(rs => (rs || []).map(r => r.id === editingReceiptId ? { ...parsedReceipt, id: editingReceiptId, addedAt: r.addedAt, updatedAt: new Date().toISOString() } : r));
+    } else {
+      setReceipts(rs => [...(rs || []), { ...parsedReceipt, addedAt: new Date().toISOString() }]);
+    }
     setParsedReceipt(null);
+    setEditingReceiptId(null);
     setScanState('idle');
   };
   const cancelScan = () => {
     setParsedReceipt(null);
     setParseError('');
+    setEditingReceiptId(null);
     setScanState('idle');
+  };
+  const startEditReceipt = (r) => {
+    // Load existing receipt into the confirm view. Ensure items have ids + category fields.
+    const loaded = {
+      ...r,
+      items: r.items.map(it => ({
+        id: it.id || uid(),
+        name: it.name || '',
+        rawText: it.rawText || '',
+        price: +it.price || 0,
+        confidence: it.confidence || 'confident',
+        category: it.category && cats.find(c => c.id === it.category) ? it.category : 'cat-other',
+        categoryConfidence: it.categoryConfidence || 'confident',
+      })),
+    };
+    setParsedReceipt(loaded);
+    setEditingReceiptId(r.id);
+    setScanState('confirming');
   };
 
   const SectionHeader = () => (
@@ -1097,7 +1128,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
         <SectionHeader />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color: C.sage, fontStyle: 'italic', fontSize: 13 }}>
           <button onClick={cancelScan} style={{ width: 28, height: 28, border: `1px solid ${C.creamDark}`, borderRadius: '50%', background: 'white', color: C.green, fontSize: 16, lineHeight: 1, cursor: 'pointer' }}>‹</button>
-          <span>Confirm receipt</span>
+          <span>{editingReceiptId ? 'Edit receipt' : 'Confirm receipt'}</span>
         </div>
 
         {/* Receipt header card */}
@@ -1209,10 +1240,10 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
 
         {/* Commit / cancel */}
         <div style={{ textAlign: 'center', marginBottom: 10 }}>
-          <Btn onClick={commitReceipt} style={{ fontSize: 15, padding: '12px 32px' }}>Add to The Real Page</Btn>
+          <Btn onClick={commitReceipt} style={{ fontSize: 15, padding: '12px 32px' }}>{editingReceiptId ? 'Save changes' : 'Add to The Real Page'}</Btn>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <button onClick={cancelScan} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>Discard this scan</button>
+          <button onClick={cancelScan} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>{editingReceiptId ? 'Cancel edit' : 'Discard this scan'}</button>
         </div>
       </div>
     );
@@ -1331,13 +1362,19 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                         <tbody>
                           {r.items.map(it => (
                             <tr key={it.id} style={{ borderTop: `1px solid ${C.cream}` }}>
-                              <td style={{ padding: '5px 7px', color: C.charcoal }}>{it.name}</td>
-                              <td style={{ padding: '5px 7px', textAlign: 'right', color: C.espresso, fontWeight: 700 }}>{fmt(it.price)}</td>
+                              <td style={{ padding: '5px 7px', color: C.charcoal, verticalAlign: 'top' }}>
+                                <div>{it.name}</div>
+                                <div style={{ marginTop: 3, display: 'inline-block', background: C.cream, border: `1px solid ${C.creamDark}`, borderRadius: 999, padding: '1px 8px', fontSize: 10, color: C.green, fontWeight: 600 }}>
+                                  {catName(it.category || 'cat-other')}
+                                </div>
+                              </td>
+                              <td style={{ padding: '5px 7px', textAlign: 'right', color: C.espresso, fontWeight: 700, verticalAlign: 'top' }}>{fmt(it.price)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 12 }}>
+                        <button onClick={() => startEditReceipt(r)} style={{ border: 'none', background: 'transparent', color: C.green, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Edit receipt</button>
                         <button onClick={() => delReceipt(r.id)} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>Remove this receipt</button>
                       </div>
                     </div>
@@ -1406,13 +1443,43 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <tbody>
-                    {dayE.map(e => (
+                    {dayE.map(e => editingEntryId === e.id ? (
+                      <tr key={e.id} style={{ borderTop: `1px solid ${C.cream}`, background: C.cream }}>
+                        <td colSpan={5} style={{ padding: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 6, marginBottom: 6 }}>
+                            <input value={entryEditForm.description} onChange={ev => setEF('description', ev.target.value)} placeholder="What I Bought / Where" style={{ padding: '6px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 12, background: 'white', color: '#2C2C2C' }} />
+                            <select value={entryEditForm.method} onChange={ev => setEF('method', ev.target.value)} style={{ padding: '6px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 12, background: 'white', color: '#2C2C2C' }}>
+                              {PAY_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <input type="number" step="0.01" value={entryEditForm.amount} onChange={ev => setEF('amount', ev.target.value)} placeholder="0.00" style={{ padding: '6px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 12, background: 'white', color: '#2C2C2C', textAlign: 'right' }} />
+                            <select value={entryEditForm.category || 'cat-other'} onChange={ev => setEF('category', ev.target.value)} style={{ padding: '6px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 12, background: 'white', color: '#2C2C2C' }}>
+                              {visibleCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <input value={entryEditForm.notes} onChange={ev => setEF('notes', ev.target.value)} placeholder="Notes" style={{ padding: '6px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 12, background: 'white', color: '#2C2C2C' }} />
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <Btn small onClick={() => {
+                              if (!entryEditForm.amount || !entryEditForm.description) return;
+                              setEntries(es => es.map(x => x.id === e.id ? { ...x, description: entryEditForm.description, method: entryEditForm.method, amount: +entryEditForm.amount, notes: entryEditForm.notes, category: entryEditForm.category || 'cat-other' } : x));
+                              setEditingEntryId(null);
+                            }}>Save</Btn>
+                            <Btn small variant="ghostDark" onClick={() => setEditingEntryId(null)}>Cancel</Btn>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
                       <tr key={e.id} style={{ borderTop: `1px solid ${C.cream}` }}>
-                        <td style={{ padding: '6px 7px', fontWeight: 600 }}>{e.description}</td>
-                        <td style={{ padding: '6px 7px', color: C.charcoalLight }}>{e.method}</td>
-                        <td style={{ padding: '6px 7px', fontWeight: 700, color: C.espresso, textAlign: 'right' }}>{fmt(e.amount)}</td>
-                        <td style={{ padding: '6px 7px', color: C.charcoalLight, fontSize: 11 }}>{e.notes || '—'}</td>
-                        <td style={{ padding: '6px 7px', textAlign: 'right' }}>
+                        <td style={{ padding: '6px 7px', fontWeight: 600, verticalAlign: 'top' }}>
+                          <div>{e.description}</div>
+                          <div style={{ marginTop: 3, display: 'inline-block', background: C.cream, border: `1px solid ${C.creamDark}`, borderRadius: 999, padding: '1px 8px', fontSize: 10, color: C.green, fontWeight: 600 }}>
+                            {catName(e.category || 'cat-other')}
+                          </div>
+                        </td>
+                        <td style={{ padding: '6px 7px', color: C.charcoalLight, verticalAlign: 'top' }}>{e.method}</td>
+                        <td style={{ padding: '6px 7px', fontWeight: 700, color: C.espresso, textAlign: 'right', verticalAlign: 'top' }}>{fmt(e.amount)}</td>
+                        <td style={{ padding: '6px 7px', color: C.charcoalLight, fontSize: 11, verticalAlign: 'top' }}>{e.notes || '—'}</td>
+                        <td style={{ padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                          <button onClick={() => { setEntryEditForm({ description: e.description, method: e.method || 'Card', amount: e.amount, notes: e.notes || '', category: e.category || 'cat-other' }); setEditingEntryId(e.id); }} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 13, marginRight: 6 }}>✎</button>
                           <button onClick={() => del(e.id)} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 13 }}>✕</button>
                         </td>
                       </tr>
@@ -1474,7 +1541,16 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                       <Card key={c.id}>
                         {isEditing ? (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                            <div style={{ flex: '1 1 140px', fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 15, color: C.charcoal }}>{c.name}</div>
+                            {c.locked ? (
+                              <div style={{ flex: '1 1 140px', fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 15, color: C.charcoal }}>{c.name}</div>
+                            ) : (
+                              <input
+                                value={catEditName}
+                                onChange={e => setCatEditName(e.target.value)}
+                                placeholder="Category name"
+                                style={{ flex: '1 1 140px', padding: '5px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'Georgia,serif', fontSize: 14, fontWeight: 500, background: 'white', color: C.charcoal, outline: 'none' }}
+                              />
+                            )}
                             <span style={{ color: C.charcoalLight, fontSize: 11.5 }}>Allotment $</span>
                             <input
                               type="number"
@@ -1485,15 +1561,17 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                               style={{ width: 90, padding: '5px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C', outline: 'none' }}
                             />
                             <Btn small onClick={() => {
-                              setCategories(xs => xs.map(x => x.id === c.id ? { ...x, allotment: +catEditValue || 0 } : x));
+                              setCategories(xs => xs.map(x => x.id === c.id ? { ...x, allotment: +catEditValue || 0, name: (c.locked || !catEditName.trim()) ? x.name : catEditName.trim() } : x));
                               setEditingCatId(null);
                               setCatEditValue('');
+                              setCatEditName('');
                             }}>Save</Btn>
-                            <Btn small variant="ghostDark" onClick={() => { setEditingCatId(null); setCatEditValue(''); }}>Cancel</Btn>
+                            <Btn small variant="ghostDark" onClick={() => { setEditingCatId(null); setCatEditValue(''); setCatEditName(''); }}>Cancel</Btn>
                             {!c.locked && (
                               <button onClick={() => {
                                 setCategories(xs => xs.map(x => x.id === c.id ? { ...x, hidden: true, allotment: 0 } : x));
                                 setEditingCatId(null);
+                                setCatEditName('');
                               }} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>hide category</button>
                             )}
                           </div>
@@ -1509,7 +1587,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                               <div style={{ width: `${pct}%`, height: '100%', background: over ? '#b8480a' : C.green, transition: 'width 0.2s' }}></div>
                             </div>
                             <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <button onClick={() => { setEditingCatId(c.id); setCatEditValue(allotment.toString()); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>edit</button>
+                              <button onClick={() => { setEditingCatId(c.id); setCatEditValue(allotment.toString()); setCatEditName(c.name); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>edit</button>
                               <div style={{ fontFamily: 'Lora,Georgia,serif', fontStyle: 'italic', color: over ? '#b8480a' : C.sage, fontSize: 11.5 }}>{over ? `${fmt(Math.abs(remaining))} over` : `${fmt(remaining)} left`}</div>
                             </div>
                           </>
@@ -1532,7 +1610,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                     <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.cream}` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 13.5, color: C.charcoal }}>{c.name}</span>
-                        <button onClick={() => { setEditingCatId(c.id); setCatEditValue(''); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 10.5, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>set a plan</button>
+                        <button onClick={() => { setEditingCatId(c.id); setCatEditValue(''); setCatEditName(c.name); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 10.5, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>set a plan</button>
                       </div>
                       <div style={{ fontFamily: 'Georgia,serif', fontSize: 14, color: C.charcoalLight, fontWeight: 700 }}>{fmt(c.spent)}</div>
                     </div>
@@ -1545,30 +1623,44 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
             )}
 
             {/* Inline allotment editor for unplanned categories (when set-a-plan clicked) */}
-            {editingCatId && !plannedRows.some(p => p.id === editingCatId) && (
-              <Card style={{ marginBottom: 14, background: C.cream }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                  <div style={{ flex: '1 1 140px', fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 15, color: C.charcoal }}>{catName(editingCatId)}</div>
-                  <span style={{ color: C.charcoalLight, fontSize: 11.5 }}>Allotment $</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={catEditValue}
-                    onChange={e => setCatEditValue(e.target.value)}
-                    autoFocus
-                    placeholder="0.00"
-                    style={{ width: 90, padding: '5px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C', outline: 'none' }}
-                  />
-                  <Btn small onClick={() => {
-                    const targetId = editingCatId;
-                    setCategories(xs => xs.map(x => x.id === targetId ? { ...x, allotment: +catEditValue || 0 } : x));
-                    setEditingCatId(null);
-                    setCatEditValue('');
-                  }}>Save plan</Btn>
-                  <Btn small variant="ghostDark" onClick={() => { setEditingCatId(null); setCatEditValue(''); }}>Cancel</Btn>
-                </div>
-              </Card>
-            )}
+            {editingCatId && !plannedRows.some(p => p.id === editingCatId) && (() => {
+              const editingCat = cats.find(c => c.id === editingCatId);
+              const locked = editingCat?.locked;
+              return (
+                <Card style={{ marginBottom: 14, background: C.cream }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                    {locked ? (
+                      <div style={{ flex: '1 1 140px', fontFamily: 'Georgia,serif', fontWeight: 500, fontSize: 15, color: C.charcoal }}>{catName(editingCatId)}</div>
+                    ) : (
+                      <input
+                        value={catEditName}
+                        onChange={e => setCatEditName(e.target.value)}
+                        placeholder="Category name"
+                        style={{ flex: '1 1 140px', padding: '5px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'Georgia,serif', fontSize: 14, fontWeight: 500, background: 'white', color: C.charcoal, outline: 'none' }}
+                      />
+                    )}
+                    <span style={{ color: C.charcoalLight, fontSize: 11.5 }}>Allotment $</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={catEditValue}
+                      onChange={e => setCatEditValue(e.target.value)}
+                      autoFocus
+                      placeholder="0.00"
+                      style={{ width: 90, padding: '5px 8px', border: `1px solid ${C.creamDark}`, borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', color: '#2C2C2C', outline: 'none' }}
+                    />
+                    <Btn small onClick={() => {
+                      const targetId = editingCatId;
+                      setCategories(xs => xs.map(x => x.id === targetId ? { ...x, allotment: +catEditValue || 0, name: (locked || !catEditName.trim()) ? x.name : catEditName.trim() } : x));
+                      setEditingCatId(null);
+                      setCatEditValue('');
+                      setCatEditName('');
+                    }}>Save plan</Btn>
+                    <Btn small variant="ghostDark" onClick={() => { setEditingCatId(null); setCatEditValue(''); setCatEditName(''); }}>Cancel</Btn>
+                  </div>
+                </Card>
+              );
+            })()}
 
             {!hasAnyActivity && (
               <Card style={{ textAlign: 'center', padding: 28, marginBottom: 14 }}>
