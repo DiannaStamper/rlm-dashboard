@@ -804,7 +804,7 @@ const STARTER_CATEGORIES = [
   { id: 'cat-other',      name: 'Other',      allotment: 0, hidden: false, isStarter: true, locked: true },
 ];
 
-function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, setCategories, cycleStart, setCycleStart, nextPayday, setNextPayday, bills, paySettings, groceryBudgets, bankBalance, bumperFund, paidBills, skippedBills }) {
+function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, setCategories, cycleStart, setCycleStart, nextPayday, setNextPayday, cycleHistory, setCycleHistory, bills, paySettings, groceryBudgets, bankBalance, bumperFund, paidBills, skippedBills }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ ...REAL_ENTRY_EMPTY });
   const [paydayInput, setPaydayInput] = useState('');
@@ -833,6 +833,9 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
   const [entryEditForm, setEntryEditForm] = useState({ ...REAL_ENTRY_EMPTY });
   const setEF = (k, v) => setEntryEditForm(f => ({ ...f, [k]: v }));
 
+  // Cycle navigation: null = current cycle; integer = index into allCycles (past cycles)
+  const [viewedCycleIndex, setViewedCycleIndex] = useState(null);
+
   // Defensive: ensure categories prop is an array; default to starters if not
   const cats = Array.isArray(categories) && categories.length ? categories : STARTER_CATEGORIES;
   const visibleCats = cats.filter(c => !c.hidden);
@@ -845,8 +848,33 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
   today.setHours(0, 0, 0, 0);
   const todayStr = todayISO();
 
-  // SETUP — no cycle yet
-  if (!cycleStart || !nextPayday) {
+  // Build the full list of past cycles, with a legacy fallback if no history
+  // is recorded yet but there's data dated before the current cycle.
+  const pastCycles = (() => {
+    const list = [...(cycleHistory || [])];
+    if (list.length === 0 && cycleStart) {
+      const allDates = [
+        ...(entries || []).map(e => e.date).filter(Boolean),
+        ...(receipts || []).map(r => r.date).filter(Boolean),
+      ].filter(d => d < cycleStart).sort();
+      if (allDates.length > 0) {
+        const oldest = allDates[0];
+        const dayBefore = new Date(cycleStart + 'T00:00:00');
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        const dayBeforeStr = `${dayBefore.getFullYear()}-${String(dayBefore.getMonth()+1).padStart(2,'0')}-${String(dayBefore.getDate()).padStart(2,'0')}`;
+        list.push({ start: oldest, end: dayBeforeStr, synthetic: true });
+      }
+    }
+    return list;
+  })();
+
+  const isViewingPast = viewedCycleIndex !== null && pastCycles[viewedCycleIndex];
+  const viewedCycle = isViewingPast ? pastCycles[viewedCycleIndex] : null;
+  const effectiveCycleStart = isViewingPast ? viewedCycle.start : cycleStart;
+  const effectiveNextPayday = isViewingPast ? viewedCycle.end : nextPayday;
+
+  // SETUP — no cycle yet (only for current cycle; past cycles always have data)
+  if (!isViewingPast && (!cycleStart || !nextPayday)) {
     const startCycle = () => {
       if (!paydayInput) return;
       setCycleStart(todayStr);
@@ -887,10 +915,11 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
     );
   }
 
-  // Cycle math
-  const cycleStartD = new Date(cycleStart + 'T00:00:00');
-  const nextPaydayD = new Date(nextPayday + 'T00:00:00');
-  const dayOfCycle = Math.max(1, Math.floor((today - cycleStartD) / 86400000) + 1);
+  // Cycle math (uses effective bounds — current or past cycle)
+  const cycleStartD = new Date(effectiveCycleStart + 'T00:00:00');
+  const nextPaydayD = new Date(effectiveNextPayday + 'T00:00:00');
+  const cycleLengthDays = Math.max(1, Math.floor((nextPaydayD - cycleStartD) / 86400000) + 1);
+  const dayOfCycle = isViewingPast ? cycleLengthDays : Math.max(1, Math.floor((today - cycleStartD) / 86400000) + 1);
   const daysToPayday = Math.max(0, Math.ceil((nextPaydayD - today) / 86400000));
 
   const inCycle = dateStr => {
@@ -905,10 +934,14 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
   const receiptsTotal = cycleReceipts.reduce((s, r) => s + (+r.total || 0), 0);
   const cycleTotal = entriesTotal + receiptsTotal;
 
-  // PAST PAYDAY — prompt new cycle
-  if (today > nextPaydayD) {
+  // PAST PAYDAY — prompt new cycle (skipped when viewing a historical cycle)
+  if (!isViewingPast && today > nextPaydayD) {
     const startNew = () => {
       if (!paydayInput) return;
+      // Push the cycle we're leaving onto history so we can navigate back later
+      if (cycleStart && nextPayday) {
+        setCycleHistory(h => [{ start: cycleStart, end: nextPayday, closedAt: new Date().toISOString() }, ...(h || [])]);
+      }
       setCycleStart(todayStr);
       setNextPayday(paydayInput);
       setPaydayInput('');
@@ -1304,26 +1337,59 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
         <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>See what's really happening.</p>
       </div>
 
+      {/* Cycle navigation */}
+      {(pastCycles.length > 0 || isViewingPast) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '6px 4px' }}>
+          {/* Older / current */}
+          <div>
+            {isViewingPast && viewedCycleIndex < pastCycles.length - 1 ? (
+              <button onClick={() => setViewedCycleIndex(viewedCycleIndex + 1)} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 12, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>← Older cycle</button>
+            ) : !isViewingPast && pastCycles.length > 0 ? (
+              <button onClick={() => setViewedCycleIndex(0)} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 12, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>← Previous cycle</button>
+            ) : <span />}
+          </div>
+          {/* Center label */}
+          {isViewingPast && (
+            <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic', letterSpacing: '0.04em' }}>
+              Viewing past cycle{viewedCycle.synthetic ? ' (reconstructed from older data)' : ''}
+            </div>
+          )}
+          {/* Newer / current */}
+          <div>
+            {isViewingPast && viewedCycleIndex > 0 ? (
+              <button onClick={() => setViewedCycleIndex(viewedCycleIndex - 1)} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 12, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>Newer cycle →</button>
+            ) : isViewingPast ? (
+              <button onClick={() => setViewedCycleIndex(null)} style={{ border: 'none', background: 'transparent', color: C.green, fontSize: 12, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Back to current →</button>
+            ) : <span />}
+          </div>
+        </div>
+      )}
+
       <Card style={{ textAlign: 'center', padding: '26px 20px 22px', marginBottom: 14 }}>
         <div style={{ fontSize: 10, color: C.sage, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>
-          Day {dayOfCycle}<span style={{ color: C.sageLight, margin: '0 8px' }}>·</span>Paycheck cycle
+          {isViewingPast
+            ? <>{fmtD(cycleStartD)}<span style={{ color: C.sageLight, margin: '0 8px' }}>—</span>{fmtD(nextPaydayD)}</>
+            : <>Day {dayOfCycle}<span style={{ color: C.sageLight, margin: '0 8px' }}>·</span>Paycheck cycle</>
+          }
         </div>
         <div style={{ fontFamily: 'Georgia,serif', color: C.green, fontSize: 56, fontWeight: 700, lineHeight: 1, margin: '6px 0 4px' }}>
           {fmt(cycleTotal)}
         </div>
         <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontSize: 16 }}>
-          spent this cycle
+          {isViewingPast ? 'spent in that cycle' : 'spent this cycle'}
         </div>
         <div style={{ height: 1, background: C.creamDark, margin: '14px auto 10px', width: '55%' }} />
         <div style={{ fontSize: 12.5, color: C.sage, fontStyle: 'italic' }}>
-          {daysToPayday === 0
-            ? `Payday lands today (${paydayWeekday})`
-            : `${daysToPayday} ${dayWord(daysToPayday)} until ${paydayWeekday}, ${paydayShort}`}
+          {isViewingPast
+            ? `ended ${paydayWeekday}, ${paydayShort}`
+            : (daysToPayday === 0
+                ? `Payday lands today (${paydayWeekday})`
+                : `${daysToPayday} ${dayWord(daysToPayday)} until ${paydayWeekday}, ${paydayShort}`)}
         </div>
       </Card>
 
-      {/* SAFETY NET — bank-aware safe-to-spend math */}
-      {(() => {
+      {/* SAFETY NET — bank-aware safe-to-spend math (current cycle only) */}
+      {!isViewingPast && (() => {
         const bank = +bankBalance || 0;
         if (!bank) {
           return (
@@ -1452,17 +1518,19 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
         );
       })()}
 
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <button
-          onClick={() => fileRef.current?.click()}
-          style={{ background: C.green, color: 'white', border: 'none', borderRadius: 999, padding: '13px 28px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 6px 14px -8px rgba(43,94,63,0.55)' }}>
-          📷 Scan a receipt
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display: 'none' }} />
-        <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic', marginTop: 6 }}>
-          Snap a photo of the receipt, or upload one from your library.
+      {!isViewingPast && (
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <button
+            onClick={() => fileRef.current?.click()}
+            style={{ background: C.green, color: 'white', border: 'none', borderRadius: 999, padding: '13px 28px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 6px 14px -8px rgba(43,94,63,0.55)' }}>
+            📷 Scan a receipt
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display: 'none' }} />
+          <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic', marginTop: 6 }}>
+            Snap a photo of the receipt, or upload one from your library.
+          </div>
         </div>
-      </div>
+      )}
 
       {/* View toggle */}
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
@@ -1538,7 +1606,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
         </>
       )}
 
-      {viewMode === 'day' && (
+      {viewMode === 'day' && !isViewingPast && (
       <Card style={{ marginBottom: 14 }}>
         {!adding ? (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1865,6 +1933,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
         );
       })()}
 
+      {!isViewingPast && (
       <div style={{ textAlign: 'center', marginTop: 14 }}>
         {!editingPayday ? (
           <button onClick={() => { setPaydayInput(nextPayday); setEditingPayday(true); }} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>
@@ -1884,6 +1953,7 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -2079,6 +2149,7 @@ export default function App() {
   const [realCategories, setRealCategories] = useState(STARTER_CATEGORIES);
   const [realCycleStart, setRealCycleStart] = useState('');
   const [realNextPayday, setRealNextPayday] = useState('');
+  const [realCycleHistory, setRealCycleHistory] = useState([]);
   const [paycheckOverrides, setPaycheckOverrides] = useState({});
   const [paidBills, setPaidBills] = useState({});
   const [skippedBills, setSkippedBills] = useState({});
@@ -2128,6 +2199,7 @@ export default function App() {
               sd.setDate(sd.getDate() + 7);
               setRealNextPayday(`${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,'0')}-${String(sd.getDate()).padStart(2,'0')}`);
             }
+            if (d.realCycleHistory && Array.isArray(d.realCycleHistory)) setRealCycleHistory(d.realCycleHistory);
             if (d.paycheckOverrides) setPaycheckOverrides(d.paycheckOverrides);
             if (d.paidBills) setPaidBills(d.paidBills);
             if (d.skippedBills) setSkippedBills(d.skippedBills);
@@ -2138,7 +2210,7 @@ export default function App() {
           }
         }
       } catch {}
-      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['realEntries', setRealEntries], ['realReceipts', setRealReceipts], ['realCategories', setRealCategories], ['realCycleStart', setRealCycleStart], ['realNextPayday', setRealNextPayday]];
+      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['realEntries', setRealEntries], ['realReceipts', setRealReceipts], ['realCategories', setRealCategories], ['realCycleStart', setRealCycleStart], ['realNextPayday', setRealNextPayday], ['realCycleHistory', setRealCycleHistory]];
       for (const [k, set] of keys) {
         try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
       }
@@ -2160,6 +2232,7 @@ export default function App() {
   useEffect(() => { sv('realCategories', realCategories); }, [realCategories]);
   useEffect(() => { sv('realCycleStart', realCycleStart); }, [realCycleStart]);
   useEffect(() => { sv('realNextPayday', realNextPayday); }, [realNextPayday]);
+  useEffect(() => { sv('realCycleHistory', realCycleHistory); }, [realCycleHistory]);
   useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
   useEffect(() => { sv('skippedBills', skippedBills); }, [skippedBills]);
   useEffect(() => { sv('bankBalance', bankBalance); }, [bankBalance]);
@@ -2167,8 +2240,8 @@ export default function App() {
 
   useEffect(() => {
     if (!dataLoaded) return;
-    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, bumperFund });
-  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, bumperFund, dataLoaded]);
+    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, realCycleHistory, paycheckOverrides, paidBills, skippedBills, bankBalance, bumperFund });
+  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCategories, realCycleStart, realNextPayday, realCycleHistory, paycheckOverrides, paidBills, skippedBills, bankBalance, bumperFund, dataLoaded]);
 
   const saveToSupabase = async (data) => {
     try {
@@ -2234,7 +2307,7 @@ export default function App() {
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" askCoach={askCoach} />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} categories={realCategories} setCategories={setRealCategories} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} bills={bills} paySettings={pay} groceryBudgets={grocery} bankBalance={bankBalance} bumperFund={bumperFund} paidBills={paidBills} skippedBills={skippedBills} />}
+        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} categories={realCategories} setCategories={setRealCategories} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} cycleHistory={realCycleHistory} setCycleHistory={setRealCycleHistory} bills={bills} paySettings={pay} groceryBudgets={grocery} bankBalance={bankBalance} bumperFund={bumperFund} paidBills={paidBills} skippedBills={skippedBills} />}
       </div>
 
       <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
