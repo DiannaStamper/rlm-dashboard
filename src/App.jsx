@@ -790,11 +790,19 @@ function SinkingFunds({ funds, setFunds }) {
 const PAY_METHODS = ['Card', 'Cash', 'Debit', 'Venmo/PayPal', 'Other'];
 const REAL_ENTRY_EMPTY = { description: '', method: 'Card', amount: '', notes: '' };
 
-function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayday, setNextPayday }) {
+function TheRealPage({ entries, setEntries, receipts, setReceipts, cycleStart, setCycleStart, nextPayday, setNextPayday }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ ...REAL_ENTRY_EMPTY });
   const [paydayInput, setPaydayInput] = useState('');
   const [editingPayday, setEditingPayday] = useState(false);
+
+  // Receipt scan state
+  const [scanState, setScanState] = useState('idle'); // 'idle' | 'reading' | 'confirming' | 'error'
+  const [parsedReceipt, setParsedReceipt] = useState(null);
+  const [parseError, setParseError] = useState('');
+  const [expandedReceiptId, setExpandedReceiptId] = useState(null);
+  const fileRef = useRef(null);
+
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const today = new Date();
@@ -849,11 +857,17 @@ function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayda
   const dayOfCycle = Math.max(1, Math.floor((today - cycleStartD) / 86400000) + 1);
   const daysToPayday = Math.max(0, Math.ceil((nextPaydayD - today) / 86400000));
 
-  const cycleEntries = entries.filter(e => {
-    const d = new Date(e.date + 'T00:00:00');
+  const inCycle = dateStr => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr + 'T00:00:00');
     return d >= cycleStartD && d <= nextPaydayD;
-  });
-  const cycleTotal = cycleEntries.reduce((s, e) => s + (+e.amount || 0), 0);
+  };
+
+  const cycleEntries = entries.filter(e => inCycle(e.date));
+  const cycleReceipts = (receipts || []).filter(r => inCycle(r.date));
+  const entriesTotal = cycleEntries.reduce((s, e) => s + (+e.amount || 0), 0);
+  const receiptsTotal = cycleReceipts.reduce((s, r) => s + (+r.total || 0), 0);
+  const cycleTotal = entriesTotal + receiptsTotal;
 
   // PAST PAYDAY — prompt new cycle
   if (today > nextPaydayD) {
@@ -902,6 +916,243 @@ function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayda
     );
   }
 
+  // RECEIPT SCAN HANDLERS
+  const handleImage = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setScanState('reading');
+    setParseError('');
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setParseError('Could not read that image. Try a different one?');
+      setScanState('error');
+    };
+    reader.onload = ev => {
+      const img = new Image();
+      img.onerror = () => {
+        setParseError('That image format is not supported (HEIC iPhone photos can fail). Save it as a JPEG or PNG and try again.');
+        setScanState('error');
+      };
+      img.onload = async () => {
+        try {
+          const MAX = 1280;
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const base64 = dataUrl.split(',')[1];
+          if (!base64) throw new Error('Empty base64 after encode');
+          const res = await fetch('/api/parse-receipt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ imageData: base64, imageType: 'image/jpeg' })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.receipt) {
+            setParseError(data.error || 'Receipt parsing failed. Try again.');
+            setScanState('error');
+            return;
+          }
+          const r = data.receipt;
+          const normalized = {
+            id: uid(),
+            merchant: r.merchant || 'Unknown',
+            date: r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : todayStr,
+            dateConfidence: r.dateConfidence || 'confident',
+            total: +r.total || 0,
+            totalConfidence: r.totalConfidence || 'confident',
+            method: 'Card',
+            items: (r.items || []).map(it => ({
+              id: uid(),
+              name: (it.name || it.rawText || 'Item').toString(),
+              rawText: (it.rawText || '').toString(),
+              price: +it.price || 0,
+              confidence: it.confidence || 'confident'
+            })),
+            notes: r.notes || ''
+          };
+          setParsedReceipt(normalized);
+          setScanState('confirming');
+        } catch (err) {
+          console.error('Receipt scan failed', err);
+          setParseError('Could not process that image. Try a different one.');
+          setScanState('error');
+        }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const updateParsedField = (k, v) => setParsedReceipt(p => ({ ...p, [k]: v }));
+  const updateItem = (id, k, v) => setParsedReceipt(p => ({
+    ...p,
+    items: p.items.map(it => it.id === id ? { ...it, [k]: v } : it)
+  }));
+  const removeItem = id => setParsedReceipt(p => ({ ...p, items: p.items.filter(it => it.id !== id) }));
+  const addBlankItem = () => setParsedReceipt(p => ({
+    ...p,
+    items: [...p.items, { id: uid(), name: '', rawText: '', price: 0, confidence: 'confident' }]
+  }));
+  const commitReceipt = () => {
+    if (!parsedReceipt) return;
+    setReceipts(rs => [...(rs || []), { ...parsedReceipt, addedAt: new Date().toISOString() }]);
+    setParsedReceipt(null);
+    setScanState('idle');
+  };
+  const cancelScan = () => {
+    setParsedReceipt(null);
+    setParseError('');
+    setScanState('idle');
+  };
+
+  const SectionHeader = () => (
+    <div style={{ marginBottom: 14 }}>
+      <h2 style={{ margin: '0 0 3px', color: C.green, fontFamily: 'Georgia,serif', fontSize: 20 }}>The Real Page</h2>
+      <p style={{ margin: 0, color: C.charcoalLight, fontSize: 12, fontStyle: 'italic' }}>See what's really happening.</p>
+    </div>
+  );
+
+  // SCAN — READING
+  if (scanState === 'reading') {
+    return (
+      <div>
+        <SectionHeader />
+        <Card style={{ textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🧾</div>
+          <div style={{ fontFamily: 'Georgia,serif', color: C.green, fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Reading your receipt…</div>
+          <div style={{ color: C.charcoalLight, fontSize: 13, fontStyle: 'italic', maxWidth: 340, margin: '0 auto' }}>This usually takes a few seconds. Hang on while I look at every line.</div>
+        </Card>
+      </div>
+    );
+  }
+
+  // SCAN — ERROR
+  if (scanState === 'error') {
+    return (
+      <div>
+        <SectionHeader />
+        <Card style={{ textAlign: 'center', padding: 32, background: '#fff3cd', border: `1.5px solid ${C.gold}` }}>
+          <div style={{ fontFamily: 'Georgia,serif', color: C.espresso, fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Something went wrong</div>
+          <div style={{ color: C.charcoalLight, fontSize: 13, maxWidth: 380, margin: '0 auto 18px', lineHeight: 1.5 }}>{parseError || 'Could not read that receipt. Try a clearer photo.'}</div>
+          <div style={{ display: 'inline-flex', gap: 8 }}>
+            <Btn small onClick={() => { setScanState('idle'); fileRef.current?.click(); }}>Try another photo</Btn>
+            <Btn small variant="ghostDark" onClick={cancelScan}>Cancel</Btn>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // SCAN — CONFIRMING
+  if (scanState === 'confirming' && parsedReceipt) {
+    const itemsSum = parsedReceipt.items.reduce((s, it) => s + (+it.price || 0), 0);
+    const diff = +(parsedReceipt.total - itemsSum).toFixed(2);
+    const reconciles = Math.abs(diff) < 0.01;
+    return (
+      <div>
+        <SectionHeader />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color: C.sage, fontStyle: 'italic', fontSize: 13 }}>
+          <button onClick={cancelScan} style={{ width: 28, height: 28, border: `1px solid ${C.creamDark}`, borderRadius: '50%', background: 'white', color: C.green, fontSize: 16, lineHeight: 1, cursor: 'pointer' }}>‹</button>
+          <span>Confirm receipt</span>
+        </div>
+
+        {/* Receipt header card */}
+        <Card style={{ textAlign: 'center', padding: '20px 18px', marginBottom: 10 }}>
+          <input
+            value={parsedReceipt.merchant}
+            onChange={e => updateParsedField('merchant', e.target.value)}
+            style={{ width: '100%', textAlign: 'center', fontFamily: 'Georgia,serif', fontSize: 19, fontWeight: 700, color: C.charcoal, letterSpacing: '0.04em', textTransform: 'uppercase', border: 'none', background: 'transparent', outline: 'none', padding: 0 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 12, color: C.sage, fontStyle: 'italic' }}>
+            <input
+              type="date"
+              value={parsedReceipt.date}
+              onChange={e => updateParsedField('date', e.target.value)}
+              style={{ border: `1px solid ${C.creamDark}`, borderRadius: 5, padding: '3px 7px', fontFamily: 'inherit', fontSize: 12, color: C.charcoalLight, background: 'white' }}
+            />
+            <span>·</span>
+            <span>{parsedReceipt.items.length} item{parsedReceipt.items.length === 1 ? '' : 's'}</span>
+          </div>
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
+            <span style={{ fontFamily: 'Georgia,serif', color: C.green, fontSize: 28, fontWeight: 700, lineHeight: 1 }}>$</span>
+            <input
+              type="number"
+              step="0.01"
+              value={parsedReceipt.total}
+              onChange={e => updateParsedField('total', +e.target.value || 0)}
+              style={{ width: 130, textAlign: 'center', fontFamily: 'Georgia,serif', fontSize: 38, fontWeight: 700, color: C.green, lineHeight: 1, border: 'none', background: 'transparent', outline: 'none', padding: 0 }}
+            />
+          </div>
+          <div style={{ marginTop: 8, fontSize: 11, color: C.sage, fontStyle: 'italic' }}>Items auto-sorted · tap a name or price to fix it.</div>
+        </Card>
+
+        {/* Items list */}
+        <Card style={{ padding: '6px 0', marginBottom: 10 }}>
+          {parsedReceipt.items.length === 0 ? (
+            <div style={{ padding: '14px', textAlign: 'center', color: C.charcoalLight, fontStyle: 'italic', fontSize: 12 }}>No items parsed. Tap "Add a line" below.</div>
+          ) : parsedReceipt.items.map((it, i) => (
+            <div key={it.id} style={{ padding: '10px 14px', borderTop: i === 0 ? 'none' : `1px solid ${C.cream}` }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 28px', gap: 8, alignItems: 'center' }}>
+                <input
+                  value={it.name}
+                  onChange={e => updateItem(it.id, 'name', e.target.value)}
+                  placeholder="Item name"
+                  style={{ width: '100%', border: `1px solid ${C.cream}`, borderRadius: 5, padding: '5px 8px', fontFamily: 'inherit', fontSize: 13, color: C.charcoal, background: 'white' }}
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={it.price}
+                  onChange={e => updateItem(it.id, 'price', +e.target.value || 0)}
+                  style={{ width: '100%', textAlign: 'right', border: `1px solid ${C.cream}`, borderRadius: 5, padding: '5px 8px', fontFamily: 'inherit', fontSize: 13, color: C.espresso, fontWeight: 600, background: 'white' }}
+                />
+                <button onClick={() => removeItem(it.id)} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, cursor: 'pointer', fontSize: 14 }}>✕</button>
+              </div>
+              {it.confidence === 'unsure' && (
+                <div style={{ marginTop: 4, fontSize: 10.5, color: '#7a5e1d', fontStyle: 'italic' }}>? Not sure I read this right — please check.</div>
+              )}
+              {it.confidence === 'unread' && (
+                <div style={{ marginTop: 4, fontSize: 10.5, color: C.charcoalLight, fontStyle: 'italic' }}>
+                  Couldn't read this line clearly. Receipt said: <span style={{ fontFamily: 'monospace' }}>{it.rawText || '—'}</span>
+                </div>
+              )}
+            </div>
+          ))}
+          <div style={{ padding: '8px 14px 4px', textAlign: 'center' }}>
+            <button onClick={addBlankItem} style={{ border: 'none', background: 'transparent', color: C.green, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Add a line</button>
+          </div>
+        </Card>
+
+        {/* Reconciliation */}
+        <div style={{ textAlign: 'center', fontSize: 12, color: reconciles ? C.sage : '#7a5e1d', fontStyle: 'italic', marginBottom: 12 }}>
+          {reconciles ? (
+            <>Items add up to {fmt(itemsSum)} ✓</>
+          ) : (
+            <>Items: {fmt(itemsSum)} · Receipt: {fmt(parsedReceipt.total)} · {diff > 0 ? `${fmt(Math.abs(diff))} unaccounted (likely tax/tip)` : `${fmt(Math.abs(diff))} over receipt — check for duplicates`}</>
+          )}
+        </div>
+
+        {/* Commit / cancel */}
+        <div style={{ textAlign: 'center', marginBottom: 10 }}>
+          <Btn onClick={commitReceipt} style={{ fontSize: 15, padding: '12px 32px' }}>Add to The Real Page</Btn>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <button onClick={cancelScan} style={{ border: 'none', background: 'transparent', color: C.sage, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>Discard this scan</button>
+        </div>
+      </div>
+    );
+  }
+
   // ACTIVE CYCLE
   const save = () => {
     if (!form.amount || !form.description) return;
@@ -910,6 +1161,7 @@ function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayda
     setAdding(false);
   };
   const del = id => setEntries(es => es.filter(x => x.id !== id));
+  const delReceipt = id => setReceipts(rs => (rs || []).filter(r => r.id !== id));
 
   const savePaydayUpdate = () => {
     if (!paydayInput) { setEditingPayday(false); return; }
@@ -953,13 +1205,64 @@ function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayda
       </Card>
 
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <button disabled style={{ background: C.creamDark, color: C.charcoalLight, border: 'none', borderRadius: 999, padding: '13px 26px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{ background: C.green, color: 'white', border: 'none', borderRadius: 999, padding: '13px 28px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 6px 14px -8px rgba(43,94,63,0.55)' }}>
           📷 Scan a receipt
         </button>
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display: 'none' }} />
         <div style={{ fontSize: 11, color: C.charcoalLight, fontStyle: 'italic', marginTop: 6 }}>
-          Coming next. For now, log purchases by hand below.
+          Snap a photo of the receipt, or upload one from your library.
         </div>
       </div>
+
+      {cycleReceipts.length > 0 && (
+        <>
+          <div style={{ textAlign: 'center', fontSize: 10, color: C.sage, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>
+            Scanned receipts
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            {[...cycleReceipts].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r => {
+              const expanded = expandedReceiptId === r.id;
+              const d = new Date(r.date + 'T00:00:00');
+              return (
+                <Card key={r.id} style={{ borderLeft: `4px solid ${C.gold}`, padding: '12px 14px' }}>
+                  <div onClick={() => setExpandedReceiptId(expanded ? null : r.id)} style={{ display: 'grid', gridTemplateColumns: '12px 1fr auto', gap: 12, alignItems: 'center', cursor: 'pointer' }}>
+                    <span style={{ width: 8, height: 8, background: C.gold, borderRadius: '50%' }}></span>
+                    <div>
+                      <div style={{ fontFamily: 'Georgia,serif', fontWeight: 700, fontSize: 14, color: C.charcoal }}>
+                        {r.merchant}
+                        <span style={{ fontStyle: 'italic', color: C.sage, fontWeight: 400, marginLeft: 8, fontSize: 12.5 }}>{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.sage, fontStyle: 'italic', marginTop: 2 }}>
+                        {r.items.length} item{r.items.length === 1 ? '' : 's'} · tap to {expanded ? 'collapse' : 'see items'}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: 'Georgia,serif', color: C.green, fontWeight: 700, fontSize: 18 }}>{fmt(r.total)}</div>
+                  </div>
+                  {expanded && (
+                    <div style={{ marginTop: 10, borderTop: `1px solid ${C.cream}`, paddingTop: 8 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <tbody>
+                          {r.items.map(it => (
+                            <tr key={it.id} style={{ borderTop: `1px solid ${C.cream}` }}>
+                              <td style={{ padding: '5px 7px', color: C.charcoal }}>{it.name}</td>
+                              <td style={{ padding: '5px 7px', textAlign: 'right', color: C.espresso, fontWeight: 700 }}>{fmt(it.price)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                        <button onClick={() => delReceipt(r.id)} style={{ border: 'none', background: 'transparent', color: C.charcoalLight, fontSize: 11, fontStyle: 'italic', cursor: 'pointer', textDecoration: 'underline' }}>Remove this receipt</button>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <Card style={{ marginBottom: 14 }}>
         {!adding ? (
@@ -986,9 +1289,9 @@ function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayda
         )}
       </Card>
 
-      {sortedDates.length === 0 ? (
+      {sortedDates.length === 0 && cycleReceipts.length === 0 ? (
         <Card><div style={{ textAlign: 'center', color: C.charcoalLight, fontStyle: 'italic', padding: '14px 0', fontSize: 13 }}>Nothing logged in this cycle yet.</div></Card>
-      ) : (
+      ) : sortedDates.length === 0 ? null : (
         sortedDates.map(ds => {
           const dayE = byDate[ds];
           const dayTotal = dayE.reduce((s, e) => s + (+e.amount || 0), 0);
@@ -1235,6 +1538,7 @@ export default function App() {
   const [snow, setSnow] = useState('');
   const [aval, setAval] = useState('');
   const [realEntries, setRealEntries] = useState([]);
+  const [realReceipts, setRealReceipts] = useState([]);
   const [realCycleStart, setRealCycleStart] = useState('');
   const [realNextPayday, setRealNextPayday] = useState('');
   const [paycheckOverrides, setPaycheckOverrides] = useState({});
@@ -1274,6 +1578,7 @@ export default function App() {
             // Migrate legacy 7-Day Tracker → The Real Page on first load if no Real Page data yet
             if (d.realEntries) setRealEntries(d.realEntries);
             else if (d.tracker) setRealEntries(d.tracker);
+            if (d.realReceipts) setRealReceipts(d.realReceipts);
             if (d.realCycleStart) setRealCycleStart(d.realCycleStart);
             else if (d.trackerStart) setRealCycleStart(d.trackerStart);
             if (d.realNextPayday) setRealNextPayday(d.realNextPayday);
@@ -1292,7 +1597,7 @@ export default function App() {
           }
         }
       } catch {}
-      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['realEntries', setRealEntries], ['realCycleStart', setRealCycleStart], ['realNextPayday', setRealNextPayday]];
+      const keys = [['bills', setBills], ['pay', setPay], ['grocery', setGrocery], ['funds', setFunds], ['goal', setGoal], ['snow', setSnow], ['aval', setAval], ['realEntries', setRealEntries], ['realReceipts', setRealReceipts], ['realCycleStart', setRealCycleStart], ['realNextPayday', setRealNextPayday]];
       for (const [k, set] of keys) {
         try { const r = await window.storage.get(`rlm_${k}`); if (r?.value) set(JSON.parse(r.value)); } catch {}
       }
@@ -1310,6 +1615,7 @@ export default function App() {
   useEffect(() => { sv('snow', snow); }, [snow]);
   useEffect(() => { sv('aval', aval); }, [aval]);
   useEffect(() => { sv('realEntries', realEntries); }, [realEntries]);
+  useEffect(() => { sv('realReceipts', realReceipts); }, [realReceipts]);
   useEffect(() => { sv('realCycleStart', realCycleStart); }, [realCycleStart]);
   useEffect(() => { sv('realNextPayday', realNextPayday); }, [realNextPayday]);
   useEffect(() => { sv('paidBills', paidBills); }, [paidBills]);
@@ -1318,8 +1624,8 @@ export default function App() {
 
   useEffect(() => {
     if (!dataLoaded) return;
-    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance });
-  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
+    saveToSupabase({ bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance });
+  }, [bills, pay, grocery, funds, goal, snow, aval, realEntries, realReceipts, realCycleStart, realNextPayday, paycheckOverrides, paidBills, skippedBills, bankBalance, dataLoaded]);
 
   const saveToSupabase = async (data) => {
     try {
@@ -1385,7 +1691,7 @@ export default function App() {
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" askCoach={askCoach} />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} />}
+        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} />}
       </div>
 
       <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
