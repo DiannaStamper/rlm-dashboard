@@ -506,11 +506,11 @@ function PaydayPage({ bills, paySettings, setPaySettings, groceryBudgets, setGro
               <div style={{ fontWeight: 700, color: '#c0392b', fontSize: 14 }}>{fmt(p.bt)}</div>
             </div>
             <div style={{ background: C.cream, borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Groceries & Extras</div>
+              <div style={{ fontSize: 9, color: C.charcoalLight, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Spending Plan</div>
               <input type="number" step="0.01" value={p.gr || ''} onChange={e => setGroceryBudgets(g => ({ ...g, [i]: e.target.value }))} onKeyDown={focusNextOnEnter} placeholder="$0.00" style={{ width: '100%', padding: '4px 6px', border: `1px solid ${C.creamDark}`, borderRadius: 5, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: C.charcoal, boxSizing: 'border-box', textAlign: 'center', background: 'white' }} />
             </div>
             <div style={{ background: balance >= 0 ? '#d4edda' : '#f8d7da', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 9, color: balance >= 0 ? '#155724' : '#842029', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Balance</div>
+              <div style={{ fontSize: 9, color: balance >= 0 ? '#155724' : '#842029', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Safety Net</div>
               <div style={{ fontWeight: 700, color: balance >= 0 ? C.green : '#c0392b', fontSize: 14 }}>{fmt(balance)}</div>
             </div>
           </div>
@@ -800,7 +800,7 @@ const STARTER_CATEGORIES = [
   { id: 'cat-other',      name: 'Other',      allotment: 0, hidden: false, isStarter: true, locked: true },
 ];
 
-function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, setCategories, cycleStart, setCycleStart, nextPayday, setNextPayday }) {
+function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, setCategories, cycleStart, setCycleStart, nextPayday, setNextPayday, bills, paySettings, groceryBudgets, bankBalance, paidBills, skippedBills }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ ...REAL_ENTRY_EMPTY });
   const [paydayInput, setPaydayInput] = useState('');
@@ -1317,6 +1317,98 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
             : `${daysToPayday} ${dayWord(daysToPayday)} until ${paydayWeekday}, ${paydayShort}`}
         </div>
       </Card>
+
+      {/* SAFETY NET — bank-aware safe-to-spend math */}
+      {(() => {
+        const bank = +bankBalance || 0;
+        if (!bank) {
+          return (
+            <Card style={{ textAlign: 'center', padding: '16px 20px', marginBottom: 14, background: '#fff9ea', border: `1.5px solid ${C.gold}` }}>
+              <div style={{ fontSize: 10, color: C.espresso, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Safety Net</div>
+              <div style={{ fontSize: 13, color: C.charcoalLight, fontStyle: 'italic', lineHeight: 1.5 }}>
+                Enter your bank balance on the <strong style={{ color: C.green, fontStyle: 'normal' }}>Payday Page</strong> to see what's safe to spend before payday lands.
+              </div>
+            </Card>
+          );
+        }
+
+        // Find the active paycheck period whose window covers today (for paid/skipped lookup)
+        const periods = paySettings && paySettings.nextDate && paySettings.amount
+          ? getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount)
+          : [];
+        const activePeriod = periods.find(p => today >= p.start && today <= p.end) || periods[0];
+
+        let billsUnpaidBeforePayday = 0;
+        let billsHasContext = false;
+        let billsCount = 0;
+        if (activePeriod && bills && bills.length) {
+          const periodBills = getBillsForPeriod(bills, activePeriod.start, activePeriod.end);
+          const periodKey = activePeriod.start.toISOString().slice(0, 10);
+          for (const b of periodBills) {
+            const pk = `${b.id}_${periodKey}`;
+            if (skippedBills && skippedBills[pk]) continue;
+            if (paidBills && paidBills[pk]) continue;
+            // Only count bills whose due date is still ahead of today, within the cycle
+            const dueD = getActualDueDate(b.dateDue, activePeriod.start, activePeriod.end);
+            if (dueD < today) continue;
+            if (dueD > nextPaydayD) continue;
+            const amt = b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0);
+            billsUnpaidBeforePayday += amt;
+            billsCount += 1;
+          }
+          billsHasContext = true;
+        }
+
+        const safe = bank - billsUnpaidBeforePayday;
+        const dailySafe = daysToPayday > 0 ? safe / daysToPayday : safe;
+        const safeColor = safe < 0 ? '#b8480a' : C.green;
+
+        return (
+          <Card style={{ padding: '20px 20px 18px', marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: C.sage, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700 }}>Safety Net</div>
+              <div style={{ fontSize: 11, color: C.sage, fontStyle: 'italic' }}>before payday</div>
+            </div>
+            <div style={{ textAlign: 'center', marginBottom: 12 }}>
+              <div style={{ fontFamily: 'Georgia,serif', color: safeColor, fontSize: 'clamp(34px, 5.5vw, 44px)', fontWeight: 700, lineHeight: 1 }}>
+                {fmt(safe)}
+              </div>
+              <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontSize: 14, marginTop: 4 }}>
+                {safe < 0 ? 'over before next paycheck' : 'safe to spend'}
+              </div>
+              {daysToPayday > 0 && safe > 0 && (
+                <div style={{ fontSize: 12, color: C.sage, fontStyle: 'italic', marginTop: 6 }}>
+                  about <strong style={{ color: C.charcoal, fontStyle: 'normal' }}>{fmt(dailySafe)}</strong>/day across {daysToPayday} {dayWord(daysToPayday)}
+                </div>
+              )}
+            </div>
+            <div style={{ borderTop: `1px solid ${C.cream}`, paddingTop: 10, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, fontSize: 11.5 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: C.charcoalLight, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', marginBottom: 3 }}>Bank now</div>
+                <div style={{ fontFamily: 'Georgia,serif', color: C.slate, fontWeight: 700, fontSize: 13 }}>{fmt(bank)}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: C.charcoalLight, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', marginBottom: 3 }}>Bills coming</div>
+                <div style={{ fontFamily: 'Georgia,serif', color: '#c0392b', fontWeight: 700, fontSize: 13 }}>{billsHasContext ? `−${fmt(billsUnpaidBeforePayday)}` : '—'}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: C.charcoalLight, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', marginBottom: 3 }}>Days left</div>
+                <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontWeight: 700, fontSize: 13 }}>{daysToPayday}</div>
+              </div>
+            </div>
+            {!billsHasContext && (
+              <div style={{ fontSize: 11, color: C.sage, fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
+                No paycheck setup yet — set up paychecks + bills on the Payday Page so I can factor them in.
+              </div>
+            )}
+            {billsHasContext && billsCount === 0 && (
+              <div style={{ fontSize: 11, color: C.sage, fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
+                No unpaid bills due before next payday.
+              </div>
+            )}
+          </Card>
+        );
+      })()}
 
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
         <button
@@ -2097,7 +2189,7 @@ export default function App() {
         {tab === 'avalanche'  && <DebtPlanPage bills={bills} amount={aval} setAmount={setAval} mode="avalanche" askCoach={askCoach} />}
         {tab === 'goals'      && <GoalsPage goal={goal} setGoal={setGoal} bills={bills} paySettings={pay} />}
         {tab === 'funds'      && <SinkingFunds funds={funds} setFunds={setFunds} />}
-        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} categories={realCategories} setCategories={setRealCategories} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} />}
+        {tab === 'real'       && <TheRealPage entries={realEntries} setEntries={setRealEntries} receipts={realReceipts} setReceipts={setRealReceipts} categories={realCategories} setCategories={setRealCategories} cycleStart={realCycleStart} setCycleStart={setRealCycleStart} nextPayday={realNextPayday} setNextPayday={setRealNextPayday} bills={bills} paySettings={pay} groceryBudgets={grocery} bankBalance={bankBalance} paidBills={paidBills} skippedBills={skippedBills} />}
       </div>
 
       <button onClick={() => setCoach(o => !o)} style={{ position: 'fixed', bottom: 18, right: 18, background: coach ? C.charcoal : C.green, color: 'white', border: 'none', borderRadius: 50, padding: '12px 20px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: 13, boxShadow: '0 4px 20px rgba(43,94,63,.4)', display: 'flex', alignItems: 'center', gap: 7, zIndex: 999, transition: 'all .2s' }}>
