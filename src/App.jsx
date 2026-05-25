@@ -938,7 +938,7 @@ function TheRealPage({ entries, setEntries, cycleStart, setCycleStart, nextPayda
         <div style={{ fontSize: 10, color: C.sage, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>
           Day {dayOfCycle}<span style={{ color: C.sageLight, margin: '0 8px' }}>·</span>Paycheck cycle
         </div>
-        <div style={{ fontFamily: 'Georgia,serif', color: C.green, fontSize: 56, fontWeight: 700, lineHeight: 1, margin: '6px 0 4px' }}>
+        <div style={{ fontFamily: 'Georgia,serif', color: C.green, fontSize: 'clamp(40px, 6.5vw, 52px)', fontWeight: 700, lineHeight: 1, margin: '6px 0 4px' }}>
           {fmt(cycleTotal)}
         </div>
         <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontSize: 16 }}>
