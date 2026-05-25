@@ -1332,36 +1332,48 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
           );
         }
 
-        // Scan all bills directly against the cycle window [today, nextPaydayD].
-        // We deliberately don't use getPeriods() here because its periods START at
-        // paySettings.nextDate (the next paycheck), so bills due BEFORE the next
-        // paycheck (the ones that actually drain the current cycle's bank balance)
-        // wouldn't fall in any of those future periods.
-        let billsUnpaidBeforePayday = 0;
+        // Mirror the Payday Page "Remaining Amount" math so the two pages agree.
+        // Use the same paycheck period (periods[0] from paySettings), the same paid/
+        // skipped state (keyed by period start), and the same Total / Cleared /
+        // Still-to-Clear breakdown. safe = bank - stillToClear.
+        const periods = paySettings && paySettings.nextDate && paySettings.amount
+          ? getPeriods(paySettings.frequency, paySettings.nextDate, paySettings.amount)
+          : [];
+        const activePeriod = periods[0];
+
+        let stillToClear = 0;
+        let cleared = 0;
+        let periodBillsCount = 0;
         let billsHasContext = false;
-        let billsCount = 0;
-        if (bills && bills.length) {
-          for (const b of bills) {
-            if (b.status === 'Zero Balance' || !b.dateDue || !b.amount) continue;
-            // Find the next occurrence of this bill's day-of-month between today and nextPaydayD.
-            const day = +b.dateDue;
-            if (!day || day < 1 || day > 31) continue;
-            // Try this month first; if the day has already passed, try next month.
-            let candidate = new Date(today.getFullYear(), today.getMonth(), day);
-            if (candidate < today) {
-              candidate = new Date(today.getFullYear(), today.getMonth() + 1, day);
-            }
-            if (candidate < today || candidate > nextPaydayD) continue;
+        let daysToNextPaycheck = daysToPayday;
+        let nextPaycheckDate = nextPaydayD;
+
+        if (activePeriod && bills && bills.length) {
+          const periodBills = getBillsForPeriod(bills, activePeriod.start, activePeriod.end);
+          const periodKey = activePeriod.start.toISOString().slice(0, 10);
+          for (const b of periodBills) {
+            const pk = `${b.id}_${periodKey}`;
+            if (skippedBills && skippedBills[pk]) continue;
             const amt = b.halfPayment ? (+b.amount || 0) / 2 : (+b.amount || 0);
-            billsUnpaidBeforePayday += amt;
-            billsCount += 1;
+            periodBillsCount += 1;
+            if (paidBills && paidBills[pk]) {
+              cleared += amt;
+            } else {
+              stillToClear += amt;
+            }
           }
           billsHasContext = true;
+          // Next paycheck per Payday Page = the day after the active period ends.
+          const np = new Date(activePeriod.end);
+          np.setDate(np.getDate() + 1);
+          nextPaycheckDate = np;
+          daysToNextPaycheck = Math.max(0, Math.ceil((np - today) / 86400000));
         }
 
-        const safe = bank - billsUnpaidBeforePayday;
-        const dailySafe = daysToPayday > 0 ? safe / daysToPayday : safe;
+        const safe = bank - stillToClear;
+        const dailySafe = daysToNextPaycheck > 0 ? safe / daysToNextPaycheck : safe;
         const safeColor = safe < 0 ? '#b8480a' : C.green;
+        const paycheckDateLabel = nextPaycheckDate ? nextPaycheckDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
 
         return (
           <Card style={{ padding: '20px 20px 18px', marginBottom: 14 }}>
@@ -1376,9 +1388,9 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
               <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontSize: 14, marginTop: 4 }}>
                 {safe < 0 ? 'over before next paycheck' : 'safe to spend'}
               </div>
-              {daysToPayday > 0 && safe > 0 && (
+              {daysToNextPaycheck > 0 && safe > 0 && (
                 <div style={{ fontSize: 12, color: C.sage, fontStyle: 'italic', marginTop: 6 }}>
-                  about <strong style={{ color: C.charcoal, fontStyle: 'normal' }}>{fmt(dailySafe)}</strong>/day across {daysToPayday} {dayWord(daysToPayday)}
+                  about <strong style={{ color: C.charcoal, fontStyle: 'normal' }}>{fmt(dailySafe)}</strong>/day across {daysToNextPaycheck} {dayWord(daysToNextPaycheck)} until next paycheck{paycheckDateLabel ? ` (${paycheckDateLabel})` : ''}
                 </div>
               )}
             </div>
@@ -1388,12 +1400,12 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                 <div style={{ fontFamily: 'Georgia,serif', color: C.slate, fontWeight: 700, fontSize: 13 }}>{fmt(bank)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ color: C.charcoalLight, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', marginBottom: 3 }}>Bills coming</div>
-                <div style={{ fontFamily: 'Georgia,serif', color: '#c0392b', fontWeight: 700, fontSize: 13 }}>{billsHasContext ? `−${fmt(billsUnpaidBeforePayday)}` : '—'}</div>
+                <div style={{ color: C.charcoalLight, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', marginBottom: 3 }}>Still to clear</div>
+                <div style={{ fontFamily: 'Georgia,serif', color: '#c0392b', fontWeight: 700, fontSize: 13 }}>{billsHasContext ? `−${fmt(stillToClear)}` : '—'}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ color: C.charcoalLight, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', marginBottom: 3 }}>Days left</div>
-                <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontWeight: 700, fontSize: 13 }}>{daysToPayday}</div>
+                <div style={{ fontFamily: 'Georgia,serif', color: C.charcoal, fontWeight: 700, fontSize: 13 }}>{daysToNextPaycheck}</div>
               </div>
             </div>
             {!billsHasContext && (
@@ -1401,9 +1413,14 @@ function TheRealPage({ entries, setEntries, receipts, setReceipts, categories, s
                 No paycheck setup yet — set up paychecks + bills on the Payday Page so I can factor them in.
               </div>
             )}
-            {billsHasContext && billsCount === 0 && (
+            {billsHasContext && periodBillsCount === 0 && (
               <div style={{ fontSize: 11, color: C.sage, fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
-                No unpaid bills due before next payday.
+                No bills due in this paycheck period.
+              </div>
+            )}
+            {billsHasContext && cleared > 0 && (
+              <div style={{ fontSize: 11, color: C.sage, fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
+                <strong style={{ color: C.green, fontStyle: 'normal' }}>{fmt(cleared)}</strong> already cleared this period.
               </div>
             )}
           </Card>
