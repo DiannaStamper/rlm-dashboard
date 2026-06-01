@@ -32,6 +32,54 @@ function verifySession(cookieHeader) {
   } catch { return null; }
 }
 
+// Obligation categories — must mirror the Everything Page CATS list in
+// src/App.jsx AND the free Ask Dee page's OBLIG_CATS, so a categorized line
+// from the 7-Day Money Review maps to a valid Everything Page category.
+const OBLIG_CATS = ['Credit', 'Debt/Loan', 'Subscription', 'Utility', 'Insurance', 'Housing', 'Transportation', 'Food', 'Medical', 'Other'];
+
+// Build a starter Everything Page (bills array) from a person's free 7-Day
+// Money Review pages, matched by email. Only the categorized "auto-payments
+// and scheduled payments" lines become obligations; the in/out spending rows
+// are deliberately left out (they're awareness, not standing bills).
+// De-duped by name (case-insensitive). Returns [] if there's nothing to seed.
+async function buildBillsFromDeePages(supabase, email) {
+  if (!email) return [];
+  const { data: pages, error } = await supabase
+    .from('dee_pages')
+    .select('answers')
+    .eq('email', email);
+  if (error || !Array.isArray(pages) || pages.length === 0) return [];
+
+  const seen = new Set();
+  const bills = [];
+  for (const row of pages) {
+    const scheduled = row?.answers?.scheduled;
+    if (!Array.isArray(scheduled)) continue;
+    for (const s of scheduled) {
+      const name = (s?.name || '').toString().trim();
+      const category = (s?.category || '').toString().trim();
+      if (!name || !category) continue;            // only named, categorized lines
+      if (!OBLIG_CATS.includes(category)) continue; // safety: known category only
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;                  // dedupe by name
+      seen.add(key);
+      bills.push({
+        id: crypto.randomUUID(),
+        status: 'Confirmed',
+        dateDue: '',
+        amount: (s?.amount || '').toString().trim(),
+        balance: '',
+        company: name,
+        category,
+        creditLimit: '', apr: '', minPayment: '', payoffDate: '', promoEnds: '',
+        notes: 'From your 7-Day Money Review',
+        halfPayment: false,
+      });
+    }
+  }
+  return bills;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', 'https://dashboard.myRealLifeMoney.com');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -67,7 +115,22 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to load data' });
     }
 
-    return res.status(200).json({ data: data?.data || null });
+    // Existing member with saved data → return it exactly as-is (never reseed).
+    if (data?.data) {
+      return res.status(200).json({ data: data.data });
+    }
+
+    // Brand-new member, nothing saved yet → seed their Everything Page from
+    // their free 7-Day Money Review (matched by email). This branch only runs
+    // when there is NO saved row, so it can never overwrite a member's edits.
+    // The client saves on first change, which persists the row and stops any
+    // future reseeding.
+    const seededBills = await buildBillsFromDeePages(supabase, userEmail);
+    if (seededBills.length > 0) {
+      return res.status(200).json({ data: { bills: seededBills } });
+    }
+
+    return res.status(200).json({ data: null });
   }
 
   if (req.method === 'POST') {
