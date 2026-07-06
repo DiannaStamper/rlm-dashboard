@@ -2249,7 +2249,7 @@ function CoachPanel({ bills, paySettings, activeTab, isOpen, onClose, prefill, c
       const res = await fetch('/api/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1024, system: `${JOURNEY_SYSTEM_PROMPT}\n\nUser context right now: ${buildCtx()}`, messages: allApi.slice(1) })
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: `${JOURNEY_SYSTEM_PROMPT}\n\nUser context right now: ${buildCtx()}`, messages: allApi.slice(1) })
       });
       const data = await res.json();
       const reply = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || 'Try again?';
